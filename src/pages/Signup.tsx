@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Eye, EyeOff, UserPlus } from 'lucide-react';
-
+import Navbar from '../components/Navbar';
 function Signup() {
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -69,7 +69,11 @@ function Signup() {
   };
 
   return (
+    <div>
+        <Navbar/>
+    
     <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+    
       <div className="max-w-md w-full backdrop-blur-xl bg-black/40 p-8 rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.5)] border border-zinc-800/50">
         <div className="text-center">
           <h2 className="mt-6 text-3xl font-extrabold bg-gradient-to-r from-white via-zinc-400 to-zinc-500 text-transparent bg-clip-text">Create your account</h2>
@@ -196,6 +200,7 @@ function Signup() {
           </div>
         </form>
       </div>
+    </div>
     </div>
   );
 }
