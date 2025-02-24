@@ -1,0 +1,41 @@
+# Ignore environment variables and secret keys
+.env
+*.env
+
+# Ignore compiled Python files
+*.pyc
+*.pyo
+__pycache__/
+
+# Ignore virtual environment
+venv/
+env/
+*.venv
+
+# Ignore macOS system files
+.DS_Store
+
+# Ignore logs and cache files
+*.log
+logs/
+cache/
+__pycache__/
+
+# Ignore IDE and editor settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore Flask instance and database files (if applicable)
+instance/
+db.sqlite3
+
+# Ignore generated credentials and API keys
+gcp-key.json
+firebase-adminsdk.json
+
+# Ignore any zip or compressed files
+*.zip
+*.tar.gz
+*.rar
