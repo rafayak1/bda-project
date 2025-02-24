@@ -63,3 +63,39 @@ def forgot_password():
     except Exception as e:
         return jsonify({"error": "Failed to send email", "details": str(e)}), 500
     
+@app.route('/reset-password', methods=['POST'])
+def reset_password():
+    data = request.json
+    token = data.get('token')
+    new_password = data.get('newPassword')
+
+    if not token or not new_password:
+        return jsonify({"message": "Token and new password are required"}), 400
+
+    try:
+        decoded_token = jwt.decode(token, app.secret_key, algorithms=["HS256"])
+        user_id = decoded_token['user_id']
+
+        user = next((u for u in users_db.values() if u["id"] == user_id), None)
+
+        if not user or user["reset_token"] != token:
+            return jsonify({"message": "Invalid or expired token"}), 400
+
+        hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+        user["password"] = hashed_password
+        user["reset_token"] = None  
+
+        return jsonify({"message": "Password updated successfully"}), 200
+
+    except jwt.ExpiredSignatureError:
+        return jsonify({"message": "Token has expired"}), 400
+    except jwt.InvalidTokenError:
+        return jsonify({"message": "Invalid token"}), 400
+    except Exception as e:
+        return jsonify({"message": f"An error occurred: {str(e)}"}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
+    
