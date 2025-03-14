@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Eye, EyeOff, UserPlus } from 'lucide-react';
 import Navbar from '../components/Navbar';
+import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { app } from './firebase'; // Ensure firebase.js is properly set up
+
 function Signup() {
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -67,6 +70,23 @@ function Signup() {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
+
+  const auth = getAuth(app);
+  const provider = new GoogleAuthProvider();
+
+  const handleGoogleSignup = async () => {
+    console.log('Google SignUp Clicked!'); // Debugging log
+    try {
+      const result = await signInWithPopup(auth, provider);
+      console.log('Google Signup Success:', result.user);
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error('Google Signup Error:', error.message);
+      } else {
+        console.error('Google Signup Error:', error);
+      }
+    }
+  };  
 
   return (
     <div>
@@ -197,6 +217,11 @@ function Signup() {
            
               Sign up
             </button>
+
+            <button type="button" onClick={handleGoogleSignup} className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-red-500 hover:bg-red-600 transition-all duration-200 md:py-4 md:text-lg md:px-10">
+              Sign up with Google
+            </button>
+
           </div>
         </form>
       </div>
