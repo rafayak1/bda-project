@@ -39,3 +39,6 @@ firebase-adminsdk.json
 *.zip
 *.tar.gz
 *.rar
+
+# ignore gcp-key.json
+gcp-key.json
