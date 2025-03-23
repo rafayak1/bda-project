@@ -5,7 +5,7 @@ import Signup from './pages/Signup';
 import Home from './pages/Home';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
-import Chat from './pages/Chat';
+import Chatx from './pages/Chaty';
 
 function App() {
   return (
@@ -16,7 +16,7 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/resetpassword" element={<ResetPassword/>} />
         <Route path="/" element={<Home/>} />
-        <Route path="/chat" element={<Chat />} />
+        <Route path="/chaty" element={<Chatx />} />
       </Routes>
     </Router>
   );
