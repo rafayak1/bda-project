@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import  axiosInstance from '../pages/axiosConfig';
+import { useNavigate } from 'react-router-dom';
 
 function Login() {
   const [showPassword, setShowPassword] = useState(false);
@@ -36,7 +37,7 @@ function Login() {
     setErrors(newErrors);
     return !newErrors.email && !newErrors.password;
   };
-
+  const navigate = useNavigate();
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (validateForm()) {
@@ -47,7 +48,7 @@ function Login() {
         });
         const token = response.data.token;
         localStorage.setItem('token', token); // Store the JWT
-        
+        navigate('/chaty');
         console.log("success")
         // Redirect to another page, e.g., dashboard
         // Change '/dashboard' to your desired path

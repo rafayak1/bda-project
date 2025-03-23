@@ -108,7 +108,7 @@ interface Message {
   fileName?: string;
 }
 
-const Chat: React.FC = () => {
+const Chatx: React.FC = () => {
   // Replace this line
   // const [user] = useAuthState(auth);
   // With this
@@ -144,17 +144,56 @@ const Chat: React.FC = () => {
       
       setMessages((prev) => [...prev, newUserMessage]);
       setMessage('');
-      
+      setTimeout(() => {
       // Simulate bot response
+      if (message.trim()=="size") {
+        // Add user message
+        const botMessage: Message  = {
+          id: Date.now().toString(),
+          text: "Dataset Dimensions:Rows: 6944800, Columns: 7",
+          isUser: false,
+          timestamp: new Date(),
+        };
+        
+        setMessages((prev) => [...prev, botMessage]);
+        setMessage('');
+      }}, 2000);
+      setTimeout(() => {
+      if (message.trim()=="columns") {
+        // Add user message
+        const botMessage: Message  = {
+          id: Date.now().toString(),
+          text: "Dataset Columns: Timestamp, Open, High, Low, Close, Volume,datetime",
+          isUser: false,
+          timestamp: new Date(),
+        };
+        
+        setMessages((prev) => [...prev, botMessage]);
+        setMessage('');
+      }}, 2000);
+      setTimeout(() => {
+      if (message.trim()=="Remove column open") {
+       
+        const botMessage: Message  = {
+          id: Date.now().toString(),
+          text: `Download your transformed dataset here: "`,
+          isUser: false,
+          timestamp: new Date(),
+        };
+        
+        setMessages((prev) => [...prev, botMessage]);
+        setMessage('');
+      } }, 4000);
+      
       setTimeout(() => {
         const botMessage: Message = {
           id: (Date.now() + 1).toString(),
-          text: "Thanks for your message! This is a demo response.",
+          text: "Anything else you would like to know about",
           isUser: false,
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, botMessage]);
-      }, 1000);
+      }, 4500);
     }
   };
 
@@ -185,7 +224,7 @@ const Chat: React.FC = () => {
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, botMessage]);
-      }, 1000);
+      }, 4000);
     }
     
     // Clear the input value so the same file can be uploaded again
@@ -200,7 +239,7 @@ const Chat: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <Navbar />
+   
       <Container maxWidth="md" sx={{ pt: 12, pb: 4 }}>
         <Box sx={{ textAlign: 'center', mb: 4 }}>
           <Typography 
@@ -268,6 +307,7 @@ const Chat: React.FC = () => {
                   {msg.isFile ? (
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       <AttachFileIcon sx={{ mr: 1 }} />
+                      {/* <p dangerouslySetInnerHTML={{ __html: msg.text }} /> */}
                       {msg.text}
                     </Box>
                   ) : (
@@ -309,4 +349,4 @@ const Chat: React.FC = () => {
   );
 };
 
-export default Chat; 
+export default Chatx; 
