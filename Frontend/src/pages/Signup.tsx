@@ -4,6 +4,11 @@ import { Eye, EyeOff, UserPlus } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { app } from './firebase'; // Ensure firebase.js is properly set up
+//import axios from 'axios';
+import  axiosInstance from '../pages/axiosConfig';
+const API_BASE_URL = 'http://localhost:5000'; // Adjust this based on your backend deployment
+
+
 
 function Signup() {
   const [showPassword, setShowPassword] = useState(false);
@@ -54,14 +59,44 @@ function Signup() {
     return !Object.values(newErrors).some(error => error !== '');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (validateForm()) {
-      // Handle signup logic here
-      console.log('Signup form submitted:', formData);
+      try {
+        console.log("h")
+        const response = await axiosInstance.post('/signup', {
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+        });
+        console.log("i")
+        const token = response.data.token;
+        localStorage.setItem('token', token);
+    
+        console.log('Signup success:', response.data);
+      } catch (error) {
+        console.error('Signup error:', error.response?.data || error.message);
+      }
     }
   };
 
+  const handleSubmitt = async () => {
+    try {
+        const response = await axios.post(
+            "http://localhost:5000/signup",
+            { username: "samiksha", password: "1234" },
+            {
+                headers: { "Content-Type": "application/json" },
+                withCredentials: true, // Required when using credentials in Flask CORS
+            }
+        );
+        console.log(response.data);
+    } catch (error) {
+        console.error("Signup error:", error);
+    }
+};
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -88,6 +123,7 @@ function Signup() {
     }
   };  
 
+  
   return (
     <div>
         <Navbar/>
