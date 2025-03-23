@@ -82,21 +82,7 @@ function Signup() {
     }
   };
 
-  const handleSubmitt = async () => {
-    try {
-        const response = await axios.post(
-            "http://localhost:5000/signup",
-            { username: "samiksha", password: "1234" },
-            {
-                headers: { "Content-Type": "application/json" },
-                withCredentials: true, // Required when using credentials in Flask CORS
-            }
-        );
-        console.log(response.data);
-    } catch (error) {
-        console.error("Signup error:", error);
-    }
-};
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
 import Navbar from '../components/Navbar';
+import  axiosInstance from '../pages/axiosConfig';
 
 function Login() {
   const [showPassword, setShowPassword] = useState(false);
@@ -36,11 +37,23 @@ function Login() {
     return !newErrors.email && !newErrors.password;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (validateForm()) {
-      // Handle login logic here
-      console.log('Login form submitted:', formData);
+      try {
+        const response = await axiosInstance.post('/login', {
+          email: formData.email,
+          password: formData.password,
+        });
+        const token = response.data.token;
+        localStorage.setItem('token', token); // Store the JWT
+        
+        console.log("success")
+        // Redirect to another page, e.g., dashboard
+        // Change '/dashboard' to your desired path
+      } catch (error) {
+        console.error('Login error:', error.response?.data || error.message);
+      }
     }
   };
 
