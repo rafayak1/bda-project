@@ -16,7 +16,10 @@ from flask_mail import Mail, Message
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
+
+#CORS(app, supports_credentials=True, origins="http://localhost:5173/")
+CORS(app, supports_credentials=True, resources={r"/signup": {"origins": "http://localhost:5173"}})
+
 load_dotenv()
 app.secret_key = os.getenv("SECRET_KEY")
 if not app.secret_key:
@@ -91,6 +94,7 @@ def unauthorized():
 @app.route('/signup', methods=['POST'])
 def signup():
     data = request.json
+    print(data)
     name, email, password = data.get('name'), data.get('email'), data.get('password')
 
     email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
@@ -130,6 +134,7 @@ def signup():
 @app.route('/login', methods=['POST'])
 def login():
     data = request.json
+    print(data)
     email, password = data.get('email'), data.get('password')
     
     user_doc = firestore_client.collection('users').where('email', '==', email).get()
