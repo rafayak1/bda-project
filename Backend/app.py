@@ -277,5 +277,11 @@ def upload_dataset():
         print(f"Error uploading file: {e}")
         return jsonify({"message": f"Failed to upload dataset: {e}"}), 500
 
+@app.route('/logout', methods=['POST'])
+@login_required
+def logout():
+    logout_user()
+    return jsonify({"message": "Logged out successfully"}), 200
+
 if __name__ == '__main__':
     app.run(debug=True)
