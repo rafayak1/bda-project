@@ -20,7 +20,6 @@ app = Flask(__name__)
 #CORS(app, supports_credentials=True, origins="http://localhost:5173/")
 CORS(app, supports_credentials=True, resources={r"/signup": {"origins": "http://localhost:5173"}})
 CORS(app, supports_credentials=True, resources={r"/login": {"origins": "http://localhost:5173"}})
-CORS(app, supports_credentials=True, resources={r"/forgot-password": {"origins": "http://localhost:5173"}})
 
 load_dotenv()
 app.secret_key = os.getenv("SECRET_KEY")
@@ -133,6 +132,50 @@ def signup():
 
     return jsonify({"message": "User registered successfully", "bucket": sanitized_bucket_name}), 201
 
+@app.route('/google-signup', methods=['POST'])
+def google_signup():
+    data = request.json
+    print(data)
+    
+    name, email, uid = data.get('name'), data.get('email'), data.get('uid')
+
+    if not name or not email or not uid:
+        return jsonify({"message": "Missing required fields"}), 400
+
+    # Validate email format
+    email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_regex, email):
+        return jsonify({"message": "Invalid email format"}), 400
+
+    users_ref = firestore_client.collection('users')
+    existing_user = users_ref.where('email', '==', email).get()
+    if existing_user:
+        return jsonify({"message": "User already exists"}), 400
+
+    sanitized_bucket_name = sanitize_bucket_name(f"{name}-bucket")
+
+    user_doc = users_ref.document()
+    user_id = user_doc.id
+    user_doc.set({
+        'name': name,
+        'email': email,
+        'auth_provider': 'google',
+        'uid': uid,
+        'bucket': sanitized_bucket_name,
+        'id': user_id
+    })
+
+    try:
+        bucket = storage_client.create_bucket(sanitized_bucket_name)
+        bucket.storage_class = "STANDARD"
+        bucket.update()
+        print(f"{sanitized_bucket_name} created.")
+    except Exception as e:
+        print(f"Error creating bucket: {e}")
+        return jsonify({"message": "Failed to create bucket"}), 500
+
+    return jsonify({"message": "Google user registered successfully", "bucket": sanitized_bucket_name}), 201
+
 @app.route('/login', methods=['POST'])
 def login():
     data = request.json
@@ -231,6 +274,260 @@ def reset_password():
         return jsonify({"message": "Invalid token"}), 400
     except Exception as e:
         return jsonify({"message": f"An error occurred: {str(e)}"}), 500
+
+@app.route('/home', methods=['POST'])
+@token_required
+def upload_dataset():
+    if 'file' not in request.files or 'file_type' not in request.form:
+        return jsonify({"message": "File and file type are required"}), 400
+
+    file, file_type = request.files['file'], request.form.get('file_type').lower()
+    user_ref = firestore_client.collection('users').document(request.user_id)
+    user_data = user_ref.get().to_dict()
+    user_bucket_name = user_data.get('bucket')
+
+    if not user_bucket_name:
+        return jsonify({"message": "User bucket not found"}), 400
+
+    filename = file.filename
+    try:
+        # Check if a dataset already exists
+        existing_dataset = user_data.get('dataset')
+        bucket = storage_client.get_bucket(user_bucket_name)
+
+        # If an existing dataset exists, delete it
+        if existing_dataset:
+            existing_blob = bucket.blob(existing_dataset)
+            if existing_blob.exists():
+                existing_blob.delete()
+                print(f"Deleted existing dataset: {existing_dataset}")
+
+        # Upload the new dataset
+        blob = bucket.blob(filename)
+        blob.upload_from_file(file)
+        print(f"Uploaded new dataset: {filename}")
+
+        # Verify the dataset structure
+        file_path = f"/tmp/{filename}"
+        blob.download_to_filename(file_path)
+        delimiter = ',' if file_type == 'csv' else '\t'
+        pd.read_csv(file_path, delimiter=delimiter, nrows=5)
+
+        # Update Firestore with the new dataset information
+        user_ref.update({'dataset': filename, 'file_type': file_type})
+        return jsonify({"message": "File uploaded successfully", "dataset": filename}), 201
+
+    except Exception as e:
+        print(f"Error uploading file: {e}")
+        return jsonify({"message": f"Failed to upload dataset: {e}"}), 500
+
+@app.route('/logout', methods=['POST'])
+@login_required
+def logout():
+    logout_user()
+    return jsonify({"message": "Logged out successfully"}), 200
+
+# Transformation endpoint
+@app.route('/transform', methods=['POST'])
+@token_required
+def transform_dataset():
+    """
+    Perform transformations or provide metadata about the dataset based on user commands.
+    """
+    try:
+        # Retrieve request data
+        user_id = request.user_id
+        data = request.json
+        command = data.get("command")
+        if not command:
+            return jsonify({"message": "No command provided"}), 400
+
+        # Retrieve dataset information
+        user_ref = firestore_client.collection('users').document(user_id)
+        user_data = user_ref.get().to_dict()
+        bucket_name = user_data.get('bucket')
+        current_dataset = user_data.get('dataset')
+        file_type = user_data.get('file_type', 'csv')
+
+        if not current_dataset:
+            return jsonify({"message": "No dataset found. Please upload a dataset first."}), 400
+
+        if command.lower() == "yes":
+            # Switch to the updated dataset
+            new_dataset_name = user_data.get('updated_dataset')
+            if not new_dataset_name:
+                return jsonify({"message": "No updated dataset found. Please apply a transformation first."}), 400
+
+            # Set the updated dataset as the current dataset and delete the old one
+            try:
+                bucket = storage_client.get_bucket(bucket_name)
+                old_blob = bucket.blob(current_dataset)
+                if old_blob.exists():
+                    old_blob.delete()  # Delete old dataset
+                    print(f"Deleted old dataset: {current_dataset}")
+
+                # Update Firestore with the new dataset information
+                user_ref.update({'dataset': new_dataset_name, 'updated_dataset': None})
+                return jsonify({"message": "Using updated dataset for further transformations."}), 200
+            except Exception as e:
+                return jsonify({"message": f"Failed to switch to updated dataset: {e}"}), 500
+
+        if command.lower() == "no":
+            return jsonify({"message": "Continuing with the original dataset for transformations."}), 200
+
+        # Load the dataset
+        dataset_to_use = user_data.get('updated_dataset') if user_data.get('updated_dataset') else current_dataset
+        delimiter = ',' if file_type == 'csv' else '\t'
+        df = load_dataset(bucket_name, dataset_to_use, delimiter=delimiter)
+
+        # Handle metadata commands
+        if command.lower() == "columns":
+            column_list = df.columns.tolist()
+            pretty_columns = "\n".join([f"● {col}" for col in column_list])
+            return jsonify({"message": f"Dataset Columns:\n{pretty_columns}"}), 200
+
+        if command.lower() == "size":
+            dimensions = f"Rows: {df.shape[0]}, Columns: {df.shape[1]}"
+            return jsonify({"message": f"Dataset Dimensions:\n{dimensions}"}), 200
+
+        # Apply transformations
+        try:
+            transformed_df = apply_predefined_transformation(df, command)
+            transformed_dataset_name = f"transformed_{current_dataset}"
+            save_dataset(bucket_name, transformed_dataset_name, transformed_df)
+
+            # Update Firestore with the new transformed dataset
+            user_ref.update({'updated_dataset': transformed_dataset_name})
+
+            # Generate download link
+            bucket = storage_client.get_bucket(bucket_name)
+            blob = bucket.blob(transformed_dataset_name)
+            download_url = blob.generate_signed_url(expiration=datetime.timedelta(hours=1))
+
+            return jsonify({
+                "message": "Transformation applied successfully.",
+                "download_url": download_url,
+                "followup_message": "Do you want to use this updated dataset for further transformations? Reply with yes or no."
+            }), 200
+
+        except ValueError as ve:
+            supported_commands = (
+                "Unsupported command.\n\n"
+                "Supported Commands:\n"
+                "● remove column <column_name>\n"
+                "  Example: remove column Age\n"
+                "● rename column <old_name> to <new_name>\n"
+                "  Example: rename column Age to Years\n"
+                "● filter rows where <condition>\n"
+                "  Example: filter rows where Age > 25\n"
+                "● columns\n"
+                "  Example: columns (to list all column names)\n"
+                "● size\n"
+                "  Example: size (to get the dataset dimensions)\n"
+                "● change dataset\n"
+            "  Example: change dataset (to upload or replace your dataset)\n"
+            )
+            return jsonify({"message": f"{ve}\n\n{supported_commands}"}), 400
+
+    except Exception as e:
+        print(f"Error in transform_dataset: {e}")
+        return jsonify({"message": f"Error: {str(e)}"}), 500
+
+
+def apply_predefined_transformation(df, command):
+    """
+    Apply supported transformations to the dataframe.
+    """
+    supported_commands = ""
+    if command.startswith("remove column"):
+        column = command.split("remove column")[-1].strip()
+        if column in df.columns:
+            df = df.drop(columns=[column])
+        else:
+            raise ValueError(f"Column '{column}' does not exist in the dataset.")
+    elif command.startswith("rename column"):
+        parts = command.split("rename column")[-1].strip().split("to")
+        if len(parts) == 2:
+            old_name, new_name = parts[0].strip(), parts[1].strip()
+            if old_name in df.columns:
+                df = df.rename(columns={old_name: new_name})
+            else:
+                raise ValueError(f"Column '{old_name}' does not exist in the dataset.")
+        else:
+            raise ValueError("Invalid rename command. Use 'rename column <old_name> to <new_name>'.")
+    elif command.startswith("filter rows where"):
+        condition = command.split("filter rows where")[-1].strip()
+        try:
+            df = df.query(condition)
+        except Exception as e:
+            raise ValueError(f"Error in filter condition: {e}")
+    else:
+        raise ValueError(supported_commands)
+    # return df
+    if command.startswith("remove column"):
+        column = command.split("remove column")[-1].strip()
+        if column in df.columns:
+            df = df.drop(columns=[column])
+        else:
+            raise ValueError(f"Column '{column}' does not exist in the dataset.")
+    elif command.startswith("rename column"):
+        parts = command.split("rename column")[-1].strip().split("to")
+        if len(parts) == 2:
+            old_name, new_name = parts[0].strip(), parts[1].strip()
+            if old_name in df.columns:
+                df = df.rename(columns={old_name: new_name})
+            else:
+                raise ValueError(f"Column '{old_name}' does not exist in the dataset.")
+        else:
+            raise ValueError("Invalid rename command. Use rename column <old_name> to <new_name>.")
+    elif command.startswith("filter rows where"):
+        condition = command.split("filter rows where")[-1].strip()
+        try:
+            df = df.query(condition)
+        except Exception as e:
+            raise ValueError(f"Error in filter condition: {e}")
+    else:
+        raise ValueError(supported_commands)
+    return df
+
+@app.route('/replace-dataset', methods=['POST'])
+@token_required
+def replace_dataset():
+    if 'file' not in request.files or 'file_type' not in request.form:
+        return jsonify({"message": "File and file type are required"}), 400
+
+    file, file_type = request.files['file'], request.form.get('file_type').lower()
+    user_ref = firestore_client.collection('users').document(request.user_id)
+    user_data = user_ref.get().to_dict()
+    user_bucket_name = user_data.get('bucket')
+
+    if not user_bucket_name:
+        return jsonify({"message": "User bucket not found"}), 400
+
+    filename = file.filename
+    try:
+        bucket = storage_client.get_bucket(user_bucket_name)
+
+        existing_dataset = user_data.get('dataset')
+        if existing_dataset:
+            bucket.blob(existing_dataset).delete()
+
+        blob = bucket.blob(filename)
+        blob.upload_from_file(file)
+        file_path = f"/tmp/{filename}"
+        blob.download_to_filename(file_path)
+
+        delimiter = ',' if file_type == 'csv' else '\t'
+        pd.read_csv(file_path, delimiter=delimiter, nrows=5)
+
+        user_ref.update({'dataset': filename, 'file_type': file_type})
+
+        return jsonify({"message": "Dataset replaced successfully!"}), 200
+
+    except Exception as e:
+        print(f"Error replacing dataset: {e}")
+        return jsonify({"message": f"Failed to replace dataset: {e}"}), 500
+
 
 @app.route('/chat', methods=['GET'])
 @token_required

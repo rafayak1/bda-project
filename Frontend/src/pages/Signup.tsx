@@ -100,7 +100,22 @@ function Signup() {
     console.log('Google SignUp Clicked!'); // Debugging log
     try {
       const result = await signInWithPopup(auth, provider);
-      console.log('Google Signup Success:', result.user);
+      const user = result.user;
+  
+      console.log('Google Signup Success:', user);
+  
+      // Send user data to backend
+      const response = await axiosInstance.post('/google-signup', {
+        name: user.displayName,
+        email: user.email,
+        uid: user.uid, // or token: await user.getIdToken() if your backend verifies Firebase tokens
+      });
+  
+      const token = response.data.token;
+      localStorage.setItem('token', token);
+      console.log('Google Signup Backend Success:', response.data);
+  
+      // navigate('/dashboard'); // if needed
     } catch (error) {
       if (error instanceof Error) {
         console.error('Google Signup Error:', error.message);
