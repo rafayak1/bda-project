@@ -5,6 +5,11 @@ import SendIcon from '@mui/icons-material/Send';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import Navbar from '../components/Navbar';
+import  axiosInstance from '../pages/axiosConfig';
+import { Database } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
+
 // Comment out these Firebase imports
 // import { auth } from '../firebase';
 // import { useAuthState } from 'react-firebase-hooks/auth';
@@ -118,7 +123,23 @@ const Chatx: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: 'Hello! How can I help you today? You can upload documents for analysis.',
+      text: `Hello! How can I help you today? You can upload documents for analysis.
+
+      Welcome to Intelligent Service! Upload your dataset and perform transformations effortlessly.
+      
+      Supported Commands:
+      ● remove column <column_name>
+        Example: remove column Age
+      ● rename column <old_name> to <new_name>
+        Example: rename column Age to Years
+      ● filter rows where <condition>
+        Example: filter rows where Age > 25
+      ● columns
+        Example: columns (to list all column names)
+      ● size
+        Example: size (to get the dataset dimensions)
+      ● change dataset
+        Example: change dataset (to upload or replace your dataset)`,
       isUser: false,
       timestamp: new Date(),
     },
@@ -197,47 +218,122 @@ const Chatx: React.FC = () => {
     }
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files && files.length > 0) {
-      const newFiles = Array.from(files);
-      setUploadedFiles((prev) => [...prev, ...newFiles]);
-      
-      // Add file upload message
+      const file = files[0]; // only support 1 file at a time
+      setUploadedFiles((prev) => [...prev, file]);
+  
       const fileMessage: Message = {
         id: Date.now().toString(),
-        text: `Uploaded: ${newFiles.map(f => f.name).join(', ')}`,
+        text: `Uploaded: ${file.name}`,
         isUser: true,
         timestamp: new Date(),
         isFile: true,
-        fileName: newFiles.map(f => f.name).join(', ')
+        fileName: file.name,
       };
-      
-      setMessages((prev) => [...prev, fileMessage]);
-      
-      // Simulate bot response to file upload
-      setTimeout(() => {
-        const botMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          text: `I've received your document${newFiles.length > 1 ? 's' : ''}. What would you like to know about ${newFiles.length > 1 ? 'them' : 'it'}?`,
-          isUser: false,
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, botMessage]);
-      }, 4000);
-    }
-    
-    // Clear the input value so the same file can be uploaded again
-    if (event.target) {
+  
+      const formData = new FormData();
+      formData.append('file', file);
+  
+      try {
+        const response = await axiosInstance.post('/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          withCredentials: true,
+        });
+  
+        setMessages((prev) => [...prev, fileMessage]);
+  
+        setTimeout(() => {
+          const botMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            text: `I've received your document. What would you like to know about it?`,
+            isUser: false,
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, botMessage]);
+        }, 3000);
+  
+      } catch (error: any) {
+        console.error(error.response?.data?.message || 'Upload failed');
+      }
+  
+      // allow re-upload of same file
       event.target.value = '';
     }
   };
+     
+      
+    //   // Simulate bot response to file upload
+    //   setTimeout(() => {
+    //     const botMessage: Message = {
+    //       id: (Date.now() + 1).toString(),
+    //       text: `I've received your document${newFiles.length > 1 ? 's' : ''}. What would you like to know about ${newFiles.length > 1 ? 'them' : 'it'}?`,
+    //       isUser: false,
+    //       timestamp: new Date(),
+    //     };
+    //     setMessages((prev) => [...prev, botMessage]);
+    //   }, 4000);
+    // }
+    
+  //   // Clear the input value so the same file can be uploaded again
+  //   if (event.target) {
+  //     event.target.value = '';
+  //   }
+  // };
 
   const triggerFileUpload = () => {
     fileInputRef.current?.click();
   };
 
   return (
+    
+
+
+<div>
+<div className="">
+      {/* Navigation */}
+      <motion.nav 
+        initial={{ y: -100 }}
+        animate={{ y: 0 }}
+        transition={{ type: "spring", stiffness: 100 }}
+        className="bg-black border-b border-gray-800 fixed w-full top-0 z-50"
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <motion.div 
+              whileHover={{ scale: 1.05 }}
+              className="flex items-center"
+            >
+              <Database className="h-8 w-8 text-white" />
+              <span className="ml-2 text-xl font-bold text-white">DataTransform AI</span>
+            </motion.div>
+            <div className="flex items-center space-x-8">
+              
+             
+              <motion.button 
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="border border-indigo-600 text-indigo-600 px-4 py-2 rounded-md hover:bg-indigo-50 transition-colors duration-200"
+              >
+           
+                <Link to="/logout" className="font-medium text-white hover:text-zinc-300 transition-colors">
+                Logout
+            </Link>
+              </motion.button>
+            </div>
+          </div>
+        </div>
+      </motion.nav>
+
+     
+    </div>
+
+
+
+
+
+
     <div className="min-h-screen bg-black text-white">
    
       <Container maxWidth="md" sx={{ pt: 12, pb: 4 }}>
@@ -300,25 +396,37 @@ const Chatx: React.FC = () => {
             </Box>
           </Box>
           
+
           <MessagesContainer sx={{ display: 'flex', flexDirection: 'column' }}>
-            {messages.map((msg) => (
-              <Box key={msg.id} sx={{ display: 'flex', justifyContent: msg.isUser ? 'flex-end' : 'flex-start' }}>
-                <MessageBubble isUser={msg.isUser}>
-                  {msg.isFile ? (
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <AttachFileIcon sx={{ mr: 1 }} />
-                      {/* <p dangerouslySetInnerHTML={{ __html: msg.text }} /> */}
-                      {msg.text}
-                    </Box>
-                  ) : (
-                    msg.text
-                  )}
-                </MessageBubble>
-              </Box>
+  {messages.map((msg) => (
+    <Box
+      key={msg.id}
+      sx={{ display: 'flex', justifyContent: msg.isUser ? 'flex-end' : 'flex-start' }}
+    >
+      <MessageBubble isUser={msg.isUser}>
+        {msg.isFile ? (
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <AttachFileIcon sx={{ mr: 1 }} />
+            {msg.text.split('\n').map((line, index) => (
+              <p key={index}>{line}</p>
             ))}
-            <div ref={messagesEndRef} />
-          </MessagesContainer>
-          
+          </Box>
+        ) : (
+          msg.text.split('\n').map((line, index) => (
+            <p key={index}>{line}</p>
+          ))
+        )}
+      </MessageBubble>
+    </Box>
+  ))}
+   <div ref={messagesEndRef} />
+</MessagesContainer>
+
+
+
+
+
+
           <Box sx={{ display: 'flex', gap: 1 }}>
             <StyledTextField
               fullWidth
@@ -345,6 +453,7 @@ const Chatx: React.FC = () => {
           </Box>
         </ChatContainer>
       </Container>
+    </div>
     </div>
   );
 };
