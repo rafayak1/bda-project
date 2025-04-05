@@ -20,7 +20,7 @@ app = Flask(__name__)
 #CORS(app, supports_credentials=True, origins="http://localhost:5173/")
 CORS(app, supports_credentials=True, resources={r"/signup": {"origins": "http://localhost:5173"}})
 CORS(app, supports_credentials=True, resources={r"/login": {"origins": "http://localhost:5173"}})
-
+CORS(app, supports_credentials=True, resources={r"/forgot-password": {"origins": "http://localhost:5173"}})
 load_dotenv()
 app.secret_key = os.getenv("SECRET_KEY")
 if not app.secret_key:

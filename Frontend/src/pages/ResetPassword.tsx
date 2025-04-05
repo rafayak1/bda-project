@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import  axiosInstance from '../pages/axiosConfig';
+import { useNavigate } from 'react-router-dom';
 
 function ResetPassword() {
   const [formData, setFormData] = useState({
@@ -34,17 +36,31 @@ function ResetPassword() {
     setErrors(newErrors);
     return !newErrors.newPassword && !newErrors.confirmPassword;
   };
-
-  const handleSubmit = (e: { preventDefault: () => void; }) => {
+  const navigate = useNavigate();
+  const handleSubmit = async (e: { preventDefault: () => void; }) => {
     e.preventDefault();
     setMessage('');
 
     if (validateForm()) {
+      try {
+        const response = await axiosInstance.post('/resetpassword', {
+          newPassword: formData.newPassword,
+          confirmPassword: formData.confirmPassword,
+        });
+        // Store the JWT
+        navigate('/login');
+        console.log("success")
+        // Redirect to another page, e.g., dashboard
+        // Change '/dashboard' to your desired path
+      } catch (error) {
+        console.error('Login error:', error.response?.data || error.message);
+      }
+
       setMessage('Your password has been successfully reset.');
       setFormData({ newPassword: '', confirmPassword: '' }); // Clear fields
     }
   };
-
+ 
   const handleChange = (e: { target: { name: any; value: any; }; }) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));

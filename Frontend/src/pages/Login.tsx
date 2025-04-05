@@ -155,7 +155,7 @@ function Login() {
             </div>
 
             <div className="text-sm">
-              <a href="#" className="font-medium text-white hover:text-zinc-300 transition-colors">
+              <a href="/forgot-password" className="font-medium text-white hover:text-zinc-300 transition-colors">
                 Forgot your password?
               </a>
             </div>

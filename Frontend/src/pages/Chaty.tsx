@@ -118,7 +118,23 @@ const Chatx: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: 'Hello! How can I help you today? You can upload documents for analysis.',
+      text: `Hello! How can I help you today? You can upload documents for analysis.
+
+      Welcome to Intelligent Service! Upload your dataset and perform transformations effortlessly.
+      
+      Supported Commands:
+      ● remove column <column_name>
+        Example: remove column Age
+      ● rename column <old_name> to <new_name>
+        Example: rename column Age to Years
+      ● filter rows where <condition>
+        Example: filter rows where Age > 25
+      ● columns
+        Example: columns (to list all column names)
+      ● size
+        Example: size (to get the dataset dimensions)
+      ● change dataset
+        Example: change dataset (to upload or replace your dataset)`,
       isUser: false,
       timestamp: new Date(),
     },
@@ -300,25 +316,37 @@ const Chatx: React.FC = () => {
             </Box>
           </Box>
           
+
           <MessagesContainer sx={{ display: 'flex', flexDirection: 'column' }}>
-            {messages.map((msg) => (
-              <Box key={msg.id} sx={{ display: 'flex', justifyContent: msg.isUser ? 'flex-end' : 'flex-start' }}>
-                <MessageBubble isUser={msg.isUser}>
-                  {msg.isFile ? (
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <AttachFileIcon sx={{ mr: 1 }} />
-                      {/* <p dangerouslySetInnerHTML={{ __html: msg.text }} /> */}
-                      {msg.text}
-                    </Box>
-                  ) : (
-                    msg.text
-                  )}
-                </MessageBubble>
-              </Box>
+  {messages.map((msg) => (
+    <Box
+      key={msg.id}
+      sx={{ display: 'flex', justifyContent: msg.isUser ? 'flex-end' : 'flex-start' }}
+    >
+      <MessageBubble isUser={msg.isUser}>
+        {msg.isFile ? (
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <AttachFileIcon sx={{ mr: 1 }} />
+            {msg.text.split('\n').map((line, index) => (
+              <p key={index}>{line}</p>
             ))}
-            <div ref={messagesEndRef} />
-          </MessagesContainer>
-          
+          </Box>
+        ) : (
+          msg.text.split('\n').map((line, index) => (
+            <p key={index}>{line}</p>
+          ))
+        )}
+      </MessageBubble>
+    </Box>
+  ))}
+   <div ref={messagesEndRef} />
+</MessagesContainer>
+
+
+
+
+
+
           <Box sx={{ display: 'flex', gap: 1 }}>
             <StyledTextField
               fullWidth

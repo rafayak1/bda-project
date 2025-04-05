@@ -61,7 +61,7 @@ function Signup() {
   };
 
   
-
+  const navigate = useNavigate();
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (validateForm()) {
@@ -75,7 +75,7 @@ function Signup() {
         console.log("i")
         const token = response.data.token;
         localStorage.setItem('token', token);
-        // navigate('/login');
+        navigate('/login');
         console.log('Signup success:', response.data);
       } catch (error) {
         console.error('Signup error:', error.response?.data || error.message);
