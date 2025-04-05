@@ -17,9 +17,9 @@ from flask_mail import Mail, Message
 # Initialize Flask app
 app = Flask(__name__)
 
-#CORS(app, supports_credentials=True, origins="http://localhost:5173/")
-CORS(app, supports_credentials=True, resources={r"/signup": {"origins": "http://localhost:5173"}})
-CORS(app, supports_credentials=True, resources={r"/login": {"origins": "http://localhost:5173"}})
+CORS(app, supports_credentials=True, origins="http://localhost:5173/")
+# CORS(app, supports_credentials=True, resources={r"/signup": {"origins": "http://localhost:5173"}})
+# CORS(app, supports_credentials=True, resources={r"/login": {"origins": "http://localhost:5173"}})
 
 load_dotenv()
 app.secret_key = os.getenv("SECRET_KEY")
@@ -131,6 +131,50 @@ def signup():
         return jsonify({"message": "Failed to create bucket"}), 500
 
     return jsonify({"message": "User registered successfully", "bucket": sanitized_bucket_name}), 201
+
+@app.route('/google-signup', methods=['POST'])
+def google_signup():
+    data = request.json
+    print(data)
+    
+    name, email, uid = data.get('name'), data.get('email'), data.get('uid')
+
+    if not name or not email or not uid:
+        return jsonify({"message": "Missing required fields"}), 400
+
+    # Validate email format
+    email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_regex, email):
+        return jsonify({"message": "Invalid email format"}), 400
+
+    users_ref = firestore_client.collection('users')
+    existing_user = users_ref.where('email', '==', email).get()
+    if existing_user:
+        return jsonify({"message": "User already exists"}), 400
+
+    sanitized_bucket_name = sanitize_bucket_name(f"{name}-bucket")
+
+    user_doc = users_ref.document()
+    user_id = user_doc.id
+    user_doc.set({
+        'name': name,
+        'email': email,
+        'auth_provider': 'google',
+        'uid': uid,
+        'bucket': sanitized_bucket_name,
+        'id': user_id
+    })
+
+    try:
+        bucket = storage_client.create_bucket(sanitized_bucket_name)
+        bucket.storage_class = "STANDARD"
+        bucket.update()
+        print(f"{sanitized_bucket_name} created.")
+    except Exception as e:
+        print(f"Error creating bucket: {e}")
+        return jsonify({"message": "Failed to create bucket"}), 500
+
+    return jsonify({"message": "Google user registered successfully", "bucket": sanitized_bucket_name}), 201
 
 @app.route('/login', methods=['POST'])
 def login():
