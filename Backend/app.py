@@ -490,5 +490,43 @@ def apply_predefined_transformation(df, command):
         raise ValueError(supported_commands)
     return df
 
+@app.route('/replace-dataset', methods=['POST'])
+@token_required
+def replace_dataset():
+    if 'file' not in request.files or 'file_type' not in request.form:
+        return jsonify({"message": "File and file type are required"}), 400
+
+    file, file_type = request.files['file'], request.form.get('file_type').lower()
+    user_ref = firestore_client.collection('users').document(request.user_id)
+    user_data = user_ref.get().to_dict()
+    user_bucket_name = user_data.get('bucket')
+
+    if not user_bucket_name:
+        return jsonify({"message": "User bucket not found"}), 400
+
+    filename = file.filename
+    try:
+        bucket = storage_client.get_bucket(user_bucket_name)
+
+        existing_dataset = user_data.get('dataset')
+        if existing_dataset:
+            bucket.blob(existing_dataset).delete()
+
+        blob = bucket.blob(filename)
+        blob.upload_from_file(file)
+        file_path = f"/tmp/{filename}"
+        blob.download_to_filename(file_path)
+
+        delimiter = ',' if file_type == 'csv' else '\t'
+        pd.read_csv(file_path, delimiter=delimiter, nrows=5)
+
+        user_ref.update({'dataset': filename, 'file_type': file_type})
+
+        return jsonify({"message": "Dataset replaced successfully!"}), 200
+
+    except Exception as e:
+        print(f"Error replacing dataset: {e}")
+        return jsonify({"message": f"Failed to replace dataset: {e}"}), 500
+
 if __name__ == '__main__':
     app.run(debug=True)
