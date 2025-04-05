@@ -20,6 +20,7 @@ app = Flask(__name__)
 #CORS(app, supports_credentials=True, origins="http://localhost:5173/")
 CORS(app, supports_credentials=True, resources={r"/signup": {"origins": "http://localhost:5173"}})
 CORS(app, supports_credentials=True, resources={r"/login": {"origins": "http://localhost:5173"}})
+CORS(app, supports_credentials=True, resources={r"/forgot-password": {"origins": "http://localhost:5173"}})
 
 load_dotenv()
 app.secret_key = os.getenv("SECRET_KEY")
@@ -230,6 +231,34 @@ def reset_password():
         return jsonify({"message": "Invalid token"}), 400
     except Exception as e:
         return jsonify({"message": f"An error occurred: {str(e)}"}), 500
-        
+
+@app.route('/chat', methods=['GET'])
+@token_required
+def chat_welcome():
+    """
+    Welcome message for the chat. Includes a description and the list of supported commands.
+    """
+    try:
+        welcome_message = (
+            "Welcome to Intelligent Service! Upload your dataset and perform transformations effortlessly.\n\n"
+            "Supported Commands:\n"
+            "● remove column <column_name>\n"
+            "  Example: remove column Age\n"
+            "● rename column <old_name> to <new_name>\n"
+            "  Example: rename column Age to Years\n"
+            "● filter rows where <condition>\n"
+            "  Example: filter rows where Age > 25\n"
+            "● columns\n"
+            "  Example: columns (to list all column names)\n"
+            "● size\n"
+            "  Example: size (to get the dataset dimensions)\n"
+            "● change dataset\n"
+            "  Example: change dataset (to upload or replace your dataset)\n"
+        )
+        return jsonify({"message": welcome_message}), 200
+    except Exception as e:
+        print(f"Error in chat_welcome: {e}")
+        return jsonify({"message": f"Error: {str(e)}"}), 500
+
 if __name__ == '__main__':
     app.run(debug=True)

@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import  axiosInstance from '../pages/axiosConfig';
+import { useNavigate } from 'react-router-dom';
+
+
 
 function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-
-  const handleSubmit = (e: { preventDefault: () => void; }) => {
+  const navigate = useNavigate();
+  const handleSubmit = async(e: { preventDefault: () => void; }) => {
     e.preventDefault();
     setError('');
     setMessage('');
@@ -20,7 +24,19 @@ function ForgotPassword() {
       setError('Please enter a valid email');
       return;
     }
-
+    try {
+      const response = await axiosInstance.post('/forgot-password', {
+        email: email,
+      
+      });
+      // Store the JWT
+      navigate('/login');
+      console.log("success")
+      // Redirect to another page, e.g., dashboard
+      // Change '/dashboard' to your desired path
+    } catch (error) {
+      console.error('Login error:', error.response?.data || error.message);
+    }
     // Simulate password reset logic
     setMessage('A password reset link has been sent to your email.');
   };
