@@ -9,6 +9,8 @@ import  axiosInstance from '../pages/axiosConfig';
 import { Database } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
 // Comment out these Firebase imports
 // import { auth } from '../firebase';
@@ -285,10 +287,20 @@ const Chatx: React.FC = () => {
   const triggerFileUpload = () => {
     fileInputRef.current?.click();
   };
+    
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      localStorage.removeItem('token');
+      navigate('/login'); // Redirect to login page after logout
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
 
   return (
     
-
 
 <div>
 <div className="">
@@ -314,12 +326,13 @@ const Chatx: React.FC = () => {
               <motion.button 
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
+                onClick={handleLogout}
                 className="border border-indigo-600 text-indigo-600 px-4 py-2 rounded-md hover:bg-indigo-50 transition-colors duration-200"
               >
            
-                <Link to="/logout" className="font-medium text-white hover:text-zinc-300 transition-colors">
+                <span className="font-medium text-white hover:text-zinc-300 transition-colors">
                 Logout
-            </Link>
+                </span>
               </motion.button>
             </div>
           </div>
