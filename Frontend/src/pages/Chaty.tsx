@@ -139,9 +139,7 @@ const Chatx: React.FC = () => {
       ● columns
         Example: columns (to list all column names)
       ● size
-        Example: size (to get the dataset dimensions)
-      ● change dataset
-        Example: change dataset (to upload or replace your dataset)`,
+        Example: size (to get the dataset dimensions)`,
       isUser: false,
       timestamp: new Date(),
     },

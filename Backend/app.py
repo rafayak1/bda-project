@@ -432,8 +432,6 @@ def transform_dataset():
                 "  Example: columns (to list all column names)\n"
                 "● size\n"
                 "  Example: size (to get the dataset dimensions)\n"
-                "● change dataset\n"
-            "  Example: change dataset (to upload or replace your dataset)\n"
             )
             return jsonify({"message": f"{ve}\n\n{supported_commands}"}), 400
 
@@ -518,8 +516,6 @@ def chat_welcome():
             "  Example: columns (to list all column names)\n"
             "● size\n"
             "  Example: size (to get the dataset dimensions)\n"
-            "● change dataset\n"
-            "  Example: change dataset (to upload or replace your dataset)\n"
         )
         return jsonify({"message": welcome_message}), 200
     except Exception as e:
