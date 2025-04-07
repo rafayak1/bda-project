@@ -149,6 +149,7 @@ const Chatx: React.FC = () => {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [hasUploaded, setHasUploaded] = useState(false);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -237,15 +238,16 @@ const Chatx: React.FC = () => {
   
       const formData = new FormData();
       formData.append('file', file);
-  
       try {
         const response = await axiosInstance.post('/upload', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
           withCredentials: true,
         });
-  
+      
         setMessages((prev) => [...prev, fileMessage]);
-  
+      
+        setHasUploaded(true);
+      
         setTimeout(() => {
           const botMessage: Message = {
             id: (Date.now() + 1).toString(),
@@ -255,10 +257,10 @@ const Chatx: React.FC = () => {
           };
           setMessages((prev) => [...prev, botMessage]);
         }, 3000);
-  
       } catch (error: any) {
         console.error(error.response?.data?.message || 'Upload failed');
       }
+      setHasUploaded(true);
   
       // allow re-upload of same file
       event.target.value = '';
@@ -398,13 +400,13 @@ const Chatx: React.FC = () => {
                 multiple
               />
               <Tooltip title="Upload Documents">
-                <UploadButton
-                  variant="contained"
-                  startIcon={<UploadFileIcon />}
-                  onClick={triggerFileUpload}
-                >
-                  Upload Documents
-                </UploadButton>
+              <UploadButton
+                variant="contained"
+                startIcon={<UploadFileIcon />}
+                onClick={triggerFileUpload}
+              >
+                {hasUploaded ? 'Replace Dataset' : 'Upload Dataset'}
+            </UploadButton>
               </Tooltip>
             </Box>
           </Box>

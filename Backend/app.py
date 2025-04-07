@@ -12,7 +12,6 @@ from functools import wraps
 from flask_cors import CORS
 import uuid
 import bcrypt  
-from flask_mail import Mail, Message  
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -32,14 +31,6 @@ if not app.secret_key:
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "gcp-key.json"
 app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 app.config['SESSION_COOKIE_SECURE'] = True
-
-app.config['MAIL_SERVER'] = os.getenv("MAIL_SERVER", "smtp.gmail.com")
-app.config['MAIL_PORT'] = int(os.getenv("MAIL_PORT", 587))
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = os.getenv("MAIL_USERNAME")
-app.config['MAIL_PASSWORD'] = os.getenv("MAIL_PASSWORD")
-
-mail = Mail(app)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -199,85 +190,6 @@ def login():
             return jsonify({"message": "Invalid credentials"}), 401
 
     return jsonify({"message": "Invalid credentials"}), 401
-
-# @app.route('/forgot-password', methods=['POST'])
-# def forgot_password():
-#     data = request.json
-#     email = data.get('email')
-
-#     users_ref = firestore_client.collection('users')
-#     user_docs = users_ref.where('email', '==', email).get()
-
-#     if not user_docs:
-#         return jsonify({"message": "Email not found"}), 404
-
-#     user_doc = user_docs[0]
-#     user_id = user_doc.id
-
-#     reset_token = jwt.encode(
-#         {"user_id": user_id, "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)},
-#         app.secret_key, algorithm="HS256"
-#     )
-
-#     users_ref.document(user_id).update({
-#         "reset_token": reset_token,
-#         "reset_token_expiry": datetime.datetime.utcnow() + datetime.timedelta(hours=1)
-#     })
-
-#     frontend_url = "http://localhost:3000/reset-password?token=" + reset_token 
-
-#     msg = Message("Password Reset Request",
-#                   sender=app.config['MAIL_USERNAME'],
-#                   recipients=[email])
-#     msg.body = f"""
-#     Click the link below to reset your password:
-#     {frontend_url}
-    
-#     If you did not request this, please ignore this email.
-#     This link expires in 1 hour.
-#     """
-
-#     try:
-#         mail.send(msg)
-#         return jsonify({"message": "Password reset link sent to your email"}), 200
-#     except Exception as e:
-#         return jsonify({"error": "Failed to send email", "details": str(e)}), 500
-    
-# @app.route('/reset-password', methods=['POST'])
-# def reset_password():
-#     data = request.json
-#     token = data.get('token')
-#     new_password = data.get('newPassword')
-
-#     if not token or not new_password:
-#         return jsonify({"message": "Token and new password are required"}), 400
-
-#     try:
-#         decoded_token = jwt.decode(token, app.secret_key, algorithms=["HS256"])
-#         user_id = decoded_token['user_id']
-
-#         user_ref = firestore_client.collection('users').document(user_id)
-#         user_data = user_ref.get().to_dict()
-
-#         if not user_data or 'reset_token' not in user_data or user_data['reset_token'] != token:
-#             return jsonify({"message": "Invalid or expired token"}), 400
-
-#         hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
-
-#         user_ref.update({
-#             "password": hashed_password.decode('utf-8'),
-#             "reset_token": None  # Remove reset token after use
-#         })
-
-#         return jsonify({"message": "Password updated successfully"}), 200
-
-#     except jwt.ExpiredSignatureError:
-#         return jsonify({"message": "Token has expired"}), 400
-#     except jwt.InvalidTokenError:
-#         return jsonify({"message": "Invalid token"}), 400
-#     except Exception as e:
-#         return jsonify({"message": f"An error occurred: {str(e)}"}), 500
-
 
 @app.route('/forgot-password', methods=['POST'])
 def forgot_password():
@@ -585,45 +497,6 @@ def apply_predefined_transformation(df, command):
     else:
         raise ValueError(supported_commands)
     return df
-
-@app.route('/replace-dataset', methods=['POST'])
-@token_required
-def replace_dataset():
-    if 'file' not in request.files or 'file_type' not in request.form:
-        return jsonify({"message": "File and file type are required"}), 400
-
-    file, file_type = request.files['file'], request.form.get('file_type').lower()
-    user_ref = firestore_client.collection('users').document(request.user_id)
-    user_data = user_ref.get().to_dict()
-    user_bucket_name = user_data.get('bucket')
-
-    if not user_bucket_name:
-        return jsonify({"message": "User bucket not found"}), 400
-
-    filename = file.filename
-    try:
-        bucket = storage_client.get_bucket(user_bucket_name)
-
-        existing_dataset = user_data.get('dataset')
-        if existing_dataset:
-            bucket.blob(existing_dataset).delete()
-
-        blob = bucket.blob(filename)
-        blob.upload_from_file(file)
-        file_path = f"/tmp/{filename}"
-        blob.download_to_filename(file_path)
-
-        delimiter = ',' if file_type == 'csv' else '\t'
-        pd.read_csv(file_path, delimiter=delimiter, nrows=5)
-
-        user_ref.update({'dataset': filename, 'file_type': file_type})
-
-        return jsonify({"message": "Dataset replaced successfully!"}), 200
-
-    except Exception as e:
-        print(f"Error replacing dataset: {e}")
-        return jsonify({"message": f"Failed to replace dataset: {e}"}), 500
-
 
 @app.route('/chat', methods=['GET'])
 @token_required
