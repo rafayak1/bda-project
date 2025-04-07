@@ -614,5 +614,19 @@ def chat_welcome():
         print(f"Error in chat_welcome: {e}")
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
+def load_dataset(bucket_name, dataset_name, delimiter=','):
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(dataset_name)
+    file_path = f"/tmp/{dataset_name}"
+    blob.download_to_filename(file_path)
+    return pd.read_csv(file_path, delimiter=delimiter)
+
+def save_dataset(bucket_name, dataset_name, dataframe):
+    bucket = storage_client.bucket(bucket_name)
+    file_path = f"/tmp/{dataset_name}"
+    dataframe.to_csv(file_path, index=False)
+    blob = bucket.blob(dataset_name)
+    blob.upload_from_filename(file_path)
+
 if __name__ == '__main__':
     app.run(debug=True)
