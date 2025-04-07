@@ -23,6 +23,7 @@ CORS(app, supports_credentials=True, resources={r"/forgot-password": {"origins":
 CORS(app, supports_credentials=True, resources={r"/reset-password": {"origins": "http://localhost:5173"}})
 CORS(app, supports_credentials=True, resources={r"/upload": {"origins": "http://localhost:5173"}})
 CORS(app, supports_credentials=True, resources={r"/transform": {"origins": "http://localhost:5173"}})
+CORS(app, supports_credentials=True, resources={r"/dataset-status": {"origins": "http://localhost:5173"}})
 
 load_dotenv()
 app.secret_key = os.getenv("SECRET_KEY")

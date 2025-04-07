@@ -158,8 +158,28 @@ const Chatx: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  useEffect(() => {
+    checkDatasetStatus();
+  }, []);
+
 const [isLoading, setIsLoading] = useState(false);
 const [awaitingResponse, setAwaitingResponse] = useState(false);
+
+const checkDatasetStatus = async () => {
+  try {
+    const response = await axiosInstance.get('/dataset-status', {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+      withCredentials: true,
+    });
+
+    const { datasetExists } = response.data;
+    setHasUploaded(datasetExists);
+  } catch (error) {
+    console.error("Error checking dataset status:", error);
+  }
+};
 
 const handleSendMessage = async () => {
   if (!message.trim()) return;
@@ -434,7 +454,7 @@ const handleSendMessage = async () => {
                 onClick={triggerFileUpload}
               >
                 {hasUploaded ? 'Replace Dataset' : 'Upload Dataset'}
-            </UploadButton>
+              </UploadButton>
               </Tooltip>
             </Box>
           </Box>
