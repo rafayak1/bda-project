@@ -22,6 +22,7 @@ CORS(app, supports_credentials=True, resources={r"/login": {"origins": "http://l
 CORS(app, supports_credentials=True, resources={r"/forgot-password": {"origins": "http://localhost:5173"}})
 CORS(app, supports_credentials=True, resources={r"/reset-password": {"origins": "http://localhost:5173"}})
 CORS(app, supports_credentials=True, resources={r"/upload": {"origins": "http://localhost:5173"}})
+CORS(app, supports_credentials=True, resources={r"/transform": {"origins": "http://localhost:5173"}})
 
 load_dotenv()
 app.secret_key = os.getenv("SECRET_KEY")
@@ -375,16 +376,22 @@ def transform_dataset():
                     print(f"Deleted old dataset: {current_dataset}")
 
                 # Update Firestore with the new dataset information
-                user_ref.update({'dataset': new_dataset_name, 'updated_dataset': None})
+                user_ref.update({
+                    'dataset': new_dataset_name,
+                    'updated_dataset': None,
+                    'use_updated': False  # reset flag
+                })
                 return jsonify({"message": "Using updated dataset for further transformations."}), 200
             except Exception as e:
                 return jsonify({"message": f"Failed to switch to updated dataset: {e}"}), 500
 
         if command.lower() == "no":
+            user_ref.update({'use_updated': False})
             return jsonify({"message": "Continuing with the original dataset for transformations."}), 200
 
-        # Load the dataset
-        dataset_to_use = user_data.get('updated_dataset') if user_data.get('updated_dataset') else current_dataset
+        # Load dataset based on use_updated flag
+        use_updated = user_data.get('use_updated', False)
+        dataset_to_use = user_data.get('updated_dataset') if use_updated and user_data.get('updated_dataset') else current_dataset
         delimiter = ',' if file_type == 'csv' else '\t'
         df = load_dataset(bucket_name, dataset_to_use, delimiter=delimiter)
 
@@ -397,6 +404,24 @@ def transform_dataset():
         if command.lower() == "size":
             dimensions = f"Rows: {df.shape[0]}, Columns: {df.shape[1]}"
             return jsonify({"message": f"Dataset Dimensions:\n{dimensions}"}), 200
+        
+        if command.lower() == "commands":
+            supported_commands = (
+            "Supported Commands:\n"
+            "● remove column <column_name>\n"
+            "  Example: remove column Age\n"
+            "● rename column <old_name> to <new_name>\n"
+            "  Example: rename column Age to Years\n"
+            "● filter rows where <condition>\n"
+            "  Example: filter rows where Age > 25\n"
+            "● columns\n"
+            "  Example: columns (to list all column names)\n"
+            "● size\n"
+            "  Example: size (to get the dataset dimensions)\n"
+            "● commands\n"
+            "  Example: commands (to see all supported commands)"
+    )
+            return jsonify({"message": supported_commands}), 200
 
         # Apply transformations
         try:
@@ -405,11 +430,13 @@ def transform_dataset():
             save_dataset(bucket_name, transformed_dataset_name, transformed_df)
 
             # Update Firestore with the new transformed dataset
-            user_ref.update({'updated_dataset': transformed_dataset_name})
+            user_ref.update({
+                'updated_dataset': transformed_dataset_name,
+                'use_updated': True
+            })
 
             # Generate download link
-            bucket = storage_client.get_bucket(bucket_name)
-            blob = bucket.blob(transformed_dataset_name)
+            blob = storage_client.get_bucket(bucket_name).blob(transformed_dataset_name)
             download_url = blob.generate_signed_url(expiration=datetime.timedelta(hours=1))
 
             return jsonify({
@@ -444,21 +471,22 @@ def apply_predefined_transformation(df, command):
     """
     Apply supported transformations to the dataframe.
     """
-    supported_commands = ""
+    # Normalize column names for robust matching
+    column_map = {col.strip().lower(): col for col in df.columns}
     if command.startswith("remove column"):
-        column = command.split("remove column")[-1].strip()
-        if column in df.columns:
-            df = df.drop(columns=[column])
+        column = command.split("remove column")[-1].strip().lower()
+        if column in column_map:
+            df = df.drop(columns=[column_map[column]])
         else:
             raise ValueError(f"Column '{column}' does not exist in the dataset.")
     elif command.startswith("rename column"):
         parts = command.split("rename column")[-1].strip().split("to")
         if len(parts) == 2:
-            old_name, new_name = parts[0].strip(), parts[1].strip()
-            if old_name in df.columns:
-                df = df.rename(columns={old_name: new_name})
+            old_name, new_name = parts[0].strip().lower(), parts[1].strip()
+            if old_name in column_map:
+                df = df.rename(columns={column_map[old_name]: new_name})
             else:
-                raise ValueError(f"Column '{old_name}' does not exist in the dataset.")
+                raise ValueError(f"Column '{parts[0].strip()}' does not exist in the dataset.")
         else:
             raise ValueError("Invalid rename command. Use 'rename column <old_name> to <new_name>'.")
     elif command.startswith("filter rows where"):
@@ -468,32 +496,8 @@ def apply_predefined_transformation(df, command):
         except Exception as e:
             raise ValueError(f"Error in filter condition: {e}")
     else:
-        raise ValueError(supported_commands)
-    # return df
-    if command.startswith("remove column"):
-        column = command.split("remove column")[-1].strip()
-        if column in df.columns:
-            df = df.drop(columns=[column])
-        else:
-            raise ValueError(f"Column '{column}' does not exist in the dataset.")
-    elif command.startswith("rename column"):
-        parts = command.split("rename column")[-1].strip().split("to")
-        if len(parts) == 2:
-            old_name, new_name = parts[0].strip(), parts[1].strip()
-            if old_name in df.columns:
-                df = df.rename(columns={old_name: new_name})
-            else:
-                raise ValueError(f"Column '{old_name}' does not exist in the dataset.")
-        else:
-            raise ValueError("Invalid rename command. Use rename column <old_name> to <new_name>.")
-    elif command.startswith("filter rows where"):
-        condition = command.split("filter rows where")[-1].strip()
-        try:
-            df = df.query(condition)
-        except Exception as e:
-            raise ValueError(f"Error in filter condition: {e}")
-    else:
-        raise ValueError(supported_commands)
+        raise ValueError("Unsupported command.")
+    
     return df
 
 #Dataset-status
