@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import  axiosInstance from '../pages/axiosConfig';
 import { useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 
 function ResetPassword() {
   const [formData, setFormData] = useState({
@@ -37,27 +38,47 @@ function ResetPassword() {
     return !newErrors.newPassword && !newErrors.confirmPassword;
   };
   const navigate = useNavigate();
+  const location = useLocation();
+  const userId = location.state?.userId;
+  // const handleSubmit = async (e: { preventDefault: () => void; }) => {
+  //   e.preventDefault();
+  //   setMessage('');
+
+  //   if (validateForm()) {
+  //     try {
+  //       const response = await axiosInstance.post('/resetpassword', {
+  //         newPassword: formData.newPassword,
+  //         confirmPassword: formData.confirmPassword,
+  //       });
+  //       // Store the JWT
+  //       navigate('/login');
+  //       console.log("success")
+  //       // Redirect to another page, e.g., dashboard
+  //       // Change '/dashboard' to your desired path
+  //     } catch (error) {
+  //       console.error('Login error:', error.response?.data || error.message);
+  //     }
+
+  //     setMessage('Your password has been successfully reset.');
+  //     setFormData({ newPassword: '', confirmPassword: '' }); // Clear fields
+  //   }
+  // };
+
   const handleSubmit = async (e: { preventDefault: () => void; }) => {
     e.preventDefault();
     setMessage('');
-
+  
     if (validateForm()) {
       try {
-        const response = await axiosInstance.post('/resetpassword', {
-          newPassword: formData.newPassword,
-          confirmPassword: formData.confirmPassword,
+        const response = await axiosInstance.post('/reset-password', {
+          user_id: userId,
+          newPassword: formData.newPassword
         });
-        // Store the JWT
         navigate('/login');
-        console.log("success")
-        // Redirect to another page, e.g., dashboard
-        // Change '/dashboard' to your desired path
       } catch (error) {
-        console.error('Login error:', error.response?.data || error.message);
+        console.error('Reset error:', error.response?.data || error.message);
+        setMessage('Something went wrong. Please try again.');
       }
-
-      setMessage('Your password has been successfully reset.');
-      setFormData({ newPassword: '', confirmPassword: '' }); // Clear fields
     }
   };
  

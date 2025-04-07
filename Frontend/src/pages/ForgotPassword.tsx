@@ -11,11 +11,41 @@ function ForgotPassword() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
-  const handleSubmit = async(e: { preventDefault: () => void; }) => {
+  // const handleSubmit = async(e: { preventDefault: () => void; }) => {
+  //   e.preventDefault();
+  //   setError('');
+  //   setMessage('');
+
+  //   if (!email) {
+  //     setError('Email is required');
+  //     return;
+  //   }
+  //   if (!/\S+@\S+\.\S+/.test(email)) {
+  //     setError('Please enter a valid email');
+  //     return;
+  //   }
+  //   try {
+  //     const response = await axiosInstance.post('/forgot-password', {
+  //       email: email,
+      
+  //     });
+  //     // Store the JWT
+  //     navigate('/login');
+  //     console.log("success")
+  //     // Redirect to another page, e.g., dashboard
+  //     // Change '/dashboard' to your desired path
+  //   } catch (error) {
+  //     console.error('Login error:', error.response?.data || error.message);
+  //   }
+  //   // Simulate password reset logic
+  //   setMessage('A password reset link has been sent to your email.');
+  // };
+
+  const handleSubmit = async (e: { preventDefault: () => void }) => {
     e.preventDefault();
     setError('');
     setMessage('');
-
+  
     if (!email) {
       setError('Email is required');
       return;
@@ -24,21 +54,17 @@ function ForgotPassword() {
       setError('Please enter a valid email');
       return;
     }
+  
     try {
-      const response = await axiosInstance.post('/forgot-password', {
-        email: email,
-      
-      });
-      // Store the JWT
-      navigate('/login');
-      console.log("success")
-      // Redirect to another page, e.g., dashboard
-      // Change '/dashboard' to your desired path
-    } catch (error) {
-      console.error('Login error:', error.response?.data || error.message);
+      const response = await axiosInstance.post('/forgot-password', { email });
+      if (response.status === 200) {
+        const userId = response.data.user_id;
+        navigate('/reset-password', { state: { userId } });
+      }
+    } catch (error: any) {
+      console.error('Error:', error.response?.data || error.message);
+      setError("Email not found. Please try again.");
     }
-    // Simulate password reset logic
-    setMessage('A password reset link has been sent to your email.');
   };
 
   return (
@@ -90,7 +116,7 @@ function ForgotPassword() {
                 type="submit"
                 className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-gradient-to-r from-indigo-600 via-purple-500 to-pink-500 hover:from-indigo-700 hover:via-purple-600 hover:to-pink-600 transition-all duration-200 md:py-4 md:text-lg md:px-10"
               >
-                Send Reset Link
+                Reset Password
               </button>
             </div>
           </form>
