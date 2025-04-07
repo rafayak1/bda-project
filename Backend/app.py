@@ -24,6 +24,7 @@ CORS(app, supports_credentials=True, resources={r"/reset-password": {"origins": 
 CORS(app, supports_credentials=True, resources={r"/upload": {"origins": "http://localhost:5173"}})
 CORS(app, supports_credentials=True, resources={r"/transform": {"origins": "http://localhost:5173"}})
 CORS(app, supports_credentials=True, resources={r"/dataset-status": {"origins": "http://localhost:5173"}})
+CORS(app, supports_credentials=True, resources={r"/preview": {"origins": "http://localhost:5173"}})
 
 load_dotenv()
 app.secret_key = os.getenv("SECRET_KEY")
@@ -229,52 +230,6 @@ def reset_password():
     user_ref.update({ "password": hashed_password })
 
     return jsonify({"message": "Password updated successfully"}), 200
-
-# @app.route('/upload', methods=['POST'])
-# @token_required
-# def upload_dataset():
-#     # if 'file' not in request.files or 'file_type' not in request.form:
-#     #     return jsonify({"message": "File and file type are required"}), 400
-
-#     file, file_type = request.files['file'], request.form.get('file_type').lower()
-#     user_ref = firestore_client.collection('users').document(request.user_id)
-#     user_data = user_ref.get().to_dict()
-#     user_bucket_name = user_data.get('bucket')
-
-#     if not user_bucket_name:
-#         return jsonify({"message": "User bucket not found"}), 400
-
-#     filename = file.filename
-#     try:
-#         # Check if a dataset already exists
-#         existing_dataset = user_data.get('dataset')
-#         bucket = storage_client.get_bucket(user_bucket_name)
-
-#         # If an existing dataset exists, delete it
-#         if existing_dataset:
-#             existing_blob = bucket.blob(existing_dataset)
-#             if existing_blob.exists():
-#                 existing_blob.delete()
-#                 print(f"Deleted existing dataset: {existing_dataset}")
-
-#         # Upload the new dataset
-#         blob = bucket.blob(filename)
-#         blob.upload_from_file(file)
-#         print(f"Uploaded new dataset: {filename}")
-
-#         # Verify the dataset structure
-#         file_path = f"/tmp/{filename}"
-#         blob.download_to_filename(file_path)
-#         delimiter = ',' if file_type == 'csv' else '\t'
-#         pd.read_csv(file_path, delimiter=delimiter, nrows=5)
-
-#         # Update Firestore with the new dataset information
-#         user_ref.update({'dataset': filename, 'file_type': file_type})
-#         return jsonify({"message": "File uploaded successfully", "dataset": filename}), 201
-
-#     except Exception as e:
-#         print(f"Error uploading file: {e}")
-#         return jsonify({"message": f"Failed to upload dataset: {e}"}), 500
 
 @app.route('/upload', methods=['POST'])
 @token_required
@@ -559,6 +514,30 @@ def save_dataset(bucket_name, dataset_name, dataframe):
     dataframe.to_csv(file_path, index=False)
     blob = bucket.blob(dataset_name)
     blob.upload_from_filename(file_path)
+    
+@app.route('/preview', methods=['GET'])
+@token_required
+def preview_dataset():
+    try:
+        user_ref = firestore_client.collection('users').document(request.user_id)
+        user_data = user_ref.get().to_dict()
+
+        dataset_name = user_data.get('updated_dataset') or user_data.get('dataset')
+        if not dataset_name:
+            return jsonify({"message": "No dataset found"}), 404
+
+        file_type = user_data.get('file_type', 'csv')
+        delimiter = ',' if file_type == 'csv' else '\t'
+
+        df = load_dataset(user_data['bucket'], dataset_name, delimiter=delimiter)
+        preview_data = df.head(100)
+        return jsonify({
+            "columns": preview_data.columns.tolist(),
+            "rows": preview_data.fillna("").to_dict(orient='records')
+        }), 200
+    except Exception as e:
+        print(f"Error in /preview: {e}")
+        return jsonify({"message": f"Error: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

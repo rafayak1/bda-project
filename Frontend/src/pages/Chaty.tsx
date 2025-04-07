@@ -12,6 +12,8 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuid } from 'uuid';
+import { DataGrid } from '@mui/x-data-grid';
+import { Dialog, DialogTitle, DialogContent, CircularProgress } from '@mui/material';
 
 // Comment out these Firebase imports
 // import { auth } from '../firebase';
@@ -91,16 +93,28 @@ const GradientButton = styled(Button)(({ theme }) => ({
   borderRadius: '8px',
 }));
 
-const UploadButton = styled(Button)(({ theme }) => ({
-  background: 'linear-gradient(to right, #4f46e5, #9333ea)',
+// const UploadButton = styled(Button)(({ theme }) => ({
+//   background: 'linear-gradient(to right, #4f46e5, #9333ea)',
+//   color: 'white',
+//   fontWeight: 'bold',
+//   '&:hover': {
+//     background: 'linear-gradient(to right, #4338ca, #7e22ce)',
+//   },
+//   padding: '10px 20px',
+//   borderRadius: '8px',
+//   marginBottom: theme.spacing(2),
+// }));
+
+const ActionButton = styled(Button)(({ theme }) => ({
+  background: 'linear-gradient(to right, #4f46e5, #9333ea, #ec4899)',
   color: 'white',
   fontWeight: 'bold',
+  padding: '10px 24px',
+  borderRadius: '12px',
+  minWidth: '180px',
   '&:hover': {
-    background: 'linear-gradient(to right, #4338ca, #7e22ce)',
+    background: 'linear-gradient(to right, #4338ca, #7e22ce, #db2777)',
   },
-  padding: '10px 20px',
-  borderRadius: '8px',
-  marginBottom: theme.spacing(2),
 }));
 
 const HiddenInput = styled('input')({
@@ -124,34 +138,15 @@ const Chatx: React.FC = () => {
   const user = null; // Mock user state
 
   const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: `Hello! How can I help you today? You can upload documents for analysis.
-
-      Welcome to Intelligent Service! Upload your dataset and perform transformations effortlessly.
-      
-      Supported Commands:
-      ● remove column <column_name>
-        Example: remove column Age
-      ● rename column <old_name> to <new_name>
-        Example: rename column Age to Years
-      ● filter rows where <condition>
-        Example: filter rows where Age > 25
-      ● columns
-        Example: columns (to list all column names)
-      ● size
-        Example: size (to get the dataset dimensions),
-      ● commands
-        Example: commands (to get all the available commands)`,
-      isUser: false,
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [hasUploaded, setHasUploaded] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewData, setPreviewData] = useState<any[]>([]);
+  const [previewColumns, setPreviewColumns] = useState<any[]>([]);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -174,8 +169,21 @@ const checkDatasetStatus = async () => {
       withCredentials: true,
     });
 
-    const { datasetExists } = response.data;
+    const { datasetExists, name } = response.data;
     setHasUploaded(datasetExists);
+
+    const welcomeMessage = datasetExists
+      ? `Welcome back, ${name}! I've found your previously uploaded dataset.\n\nYou can begin performing transformations. Type "commands" to see supported instructions.`
+      : `Hello, ${name}! Welcome to Intelligent Service.\n\nPlease upload a dataset to get started.\n\nType "commands" to see what you can do.`;
+
+    setMessages([
+      {
+        id: Date.now().toString(),
+        text: welcomeMessage,
+        isUser: false,
+        timestamp: new Date(),
+      },
+    ]);
   } catch (error) {
     console.error("Error checking dataset status:", error);
   }
@@ -267,6 +275,32 @@ const handleSendMessage = async () => {
   }
 
   await tryTransform();
+};
+
+const handlePreviewDataset = async () => {
+  setLoadingPreview(true);
+  setPreviewOpen(true);
+  try {
+    const response = await axiosInstance.get('/preview', {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+    });
+
+    const { data } = response;
+    if (data.rows && data.columns) {
+      setPreviewData(data.rows);
+      setPreviewColumns(
+        data.columns.map((col: string) => ({
+          field: col,
+          headerName: col,
+          width: 150,
+        }))
+      );
+    }
+  } catch (error) {
+    console.error('Failed to fetch preview:', error);
+  } finally {
+    setLoadingPreview(false);
+  }
 };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -448,13 +482,20 @@ const handleSendMessage = async () => {
                 multiple
               />
               <Tooltip title="Upload Documents">
-              <UploadButton
-                variant="contained"
-                startIcon={<UploadFileIcon />}
-                onClick={triggerFileUpload}
-              >
-                {hasUploaded ? 'Replace Dataset' : 'Upload Dataset'}
-              </UploadButton>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+  <ActionButton
+    startIcon={<UploadFileIcon />}
+    onClick={triggerFileUpload}
+  >
+    {hasUploaded ? 'Replace Dataset' : 'Upload Dataset'}
+  </ActionButton>
+
+  {hasUploaded && (
+    <ActionButton onClick={handlePreviewDataset}>
+      View Dataset
+    </ActionButton>
+  )}
+</Box>
               </Tooltip>
             </Box>
           </Box>
@@ -533,6 +574,34 @@ const handleSendMessage = async () => {
         </ChatContainer>
       </Container>
     </div>
+    <Dialog
+  open={previewOpen}
+  onClose={() => setPreviewOpen(false)}
+  maxWidth="lg"
+  fullWidth
+>
+  <DialogTitle sx={{ fontWeight: 'bold', color: '#111827' }}>
+    Dataset Preview
+  </DialogTitle>
+  <DialogContent>
+    {loadingPreview ? (
+      <Box display="flex" justifyContent="center" p={3}>
+        <CircularProgress />
+      </Box>
+    ) : (
+      <div style={{ height: 500, width: '100%', backgroundColor: 'white', borderRadius: 8, padding: 10 }}>
+<DataGrid
+  rows={previewData}
+  columns={previewColumns}
+  pageSize={10}
+  getRowId={(row) => row.EVENT_ID || row.id} // fallback if EVENT_ID doesn't exist
+  rowsPerPageOptions={[10]}
+  disableSelectionOnClick
+/>
+      </div>
+    )}
+  </DialogContent>
+</Dialog>
     </div>
   );
 };
