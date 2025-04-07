@@ -496,6 +496,25 @@ def apply_predefined_transformation(df, command):
         raise ValueError(supported_commands)
     return df
 
+#Dataset-status
+@app.route('/dataset-status', methods=['GET'])
+@token_required
+def dataset_status():
+    try:
+        user_ref = firestore_client.collection('users').document(request.user_id)
+        user_data = user_ref.get().to_dict()
+
+        if not user_data:
+            return jsonify({"datasetExists": False, "name": None}), 200
+
+        return jsonify({
+            "datasetExists": bool(user_data.get('dataset')),
+            "name": user_data.get('name'),
+        }), 200
+    except Exception as e:
+        print(f"Error in dataset_status: {e}")
+        return jsonify({"message": f"Failed to check dataset status."}), 500
+
 @app.route('/chat', methods=['GET'])
 @token_required
 def chat_welcome():
