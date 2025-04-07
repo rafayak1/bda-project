@@ -11,6 +11,7 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { v4 as uuid } from 'uuid';
 
 // Comment out these Firebase imports
 // import { auth } from '../firebase';
@@ -113,6 +114,7 @@ interface Message {
   timestamp: Date;
   isFile?: boolean;
   fileName?: string;
+  downloadUrl?: string;
 }
 
 const Chatx: React.FC = () => {
@@ -139,7 +141,9 @@ const Chatx: React.FC = () => {
       ● columns
         Example: columns (to list all column names)
       ● size
-        Example: size (to get the dataset dimensions)`,
+        Example: size (to get the dataset dimensions),
+      ● commands
+        Example: commands (to get all the available commands)`,
       isUser: false,
       timestamp: new Date(),
     },
@@ -154,70 +158,96 @@ const Chatx: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSendMessage = () => {
-    if (message.trim()) {
-      // Add user message
-      const newUserMessage: Message = {
-        id: Date.now().toString(),
-        text: message,
-        isUser: true,
+const [isLoading, setIsLoading] = useState(false);
+const [awaitingResponse, setAwaitingResponse] = useState(false);
+
+const handleSendMessage = async () => {
+  if (!message.trim()) return;
+
+  const inputText = message;
+  setMessage('');
+  setIsLoading(true);
+
+  const newUserMessage: Message = {
+    id: uuid(),
+    text: inputText,
+    isUser: true,
+    timestamp: new Date(),
+  };
+  setMessages((prev) => [...prev, newUserMessage]);
+
+  const tryTransform = async (retry = 0) => {
+    try {
+      const response = await axiosInstance.post(
+        '/transform',
+        { command: inputText },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+          withCredentials: true,
+        }
+      );
+
+      const { message: botText, download_url, followup_message } = response.data;
+
+      const responseMessages: Message[] = [];
+
+      responseMessages.push({
+        id: uuid(),
+        text: botText,
+        isUser: false,
         timestamp: new Date(),
-      };
-      
-      setMessages((prev) => [...prev, newUserMessage]);
-      setMessage('');
-      setTimeout(() => {
-      // Simulate bot response
-      if (message.trim()=="size") {
-        // Add user message
-        const botMessage: Message  = {
-          id: Date.now().toString(),
-          text: "Dataset Dimensions:Rows: 6944800, Columns: 7",
+        ...(download_url && { downloadUrl: download_url }),
+      });
+
+      if (download_url) {
+        responseMessages.push({
+          id: uuid(),
+          text: '',
           isUser: false,
           timestamp: new Date(),
-        };
-        
-        setMessages((prev) => [...prev, botMessage]);
-        setMessage('');
-      }}, 2000);
-      setTimeout(() => {
-      if (message.trim()=="columns") {
-        // Add user message
-        const botMessage: Message  = {
-          id: Date.now().toString(),
-          text: "Dataset Columns: Timestamp, Open, High, Low, Close, Volume,datetime",
+          isFile: true,
+          fileName: download_url, // actual URL goes here
+        });
+      }
+
+      if (followup_message) {
+        responseMessages.push({
+          id: uuid(),
+          text: followup_message,
           isUser: false,
           timestamp: new Date(),
-        };
-        
-        setMessages((prev) => [...prev, botMessage]);
-        setMessage('');
-      }}, 2000);
-      setTimeout(() => {
-      if (message.trim()=="Remove column open") {
-       
-        const botMessage: Message  = {
-          id: Date.now().toString(),
-          text: `Download your transformed dataset here: "`,
-          isUser: false,
-          timestamp: new Date(),
-        };
-        
-        setMessages((prev) => [...prev, botMessage]);
-        setMessage('');
-      } }, 4000);
-      
-      setTimeout(() => {
-        const botMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          text: "Anything else you would like to know about",
-          isUser: false,
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, botMessage]);
-      }, 4500);
+        });
+        setAwaitingResponse(true);
+      }
+
+      setMessages((prev) => [...prev, ...responseMessages]);
+    } catch (err: any) {
+      if (retry < 2) {
+        await tryTransform(retry + 1); // try again
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uuid(),
+            text: err?.response?.data?.message || 'Something went wrong. Please try again later.',
+            isUser: false,
+            timestamp: new Date(),
+          },
+        ]);
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
+
+  if (awaitingResponse && (inputText.toLowerCase() === 'yes' || inputText.toLowerCase() === 'no')) {
+    setAwaitingResponse(false);
+  }
+
+  await tryTransform();
+};
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -413,24 +443,34 @@ const Chatx: React.FC = () => {
           <MessagesContainer sx={{ display: 'flex', flexDirection: 'column' }}>
   {messages.map((msg) => (
     <Box
-      key={msg.id}
-      sx={{ display: 'flex', justifyContent: msg.isUser ? 'flex-end' : 'flex-start' }}
-    >
-      <MessageBubble isUser={msg.isUser}>
-        {msg.isFile ? (
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <AttachFileIcon sx={{ mr: 1 }} />
-            {msg.text.split('\n').map((line, index) => (
-              <p key={index}>{line}</p>
-            ))}
-          </Box>
-        ) : (
-          msg.text.split('\n').map((line, index) => (
-            <p key={index}>{line}</p>
-          ))
-        )}
-      </MessageBubble>
-    </Box>
+  key={msg.id}
+  sx={{ display: 'flex', justifyContent: msg.isUser ? 'flex-end' : 'flex-start' }}
+>
+  <MessageBubble isUser={msg.isUser}>
+    {msg.downloadUrl ? (
+      <Button
+        variant="outlined"
+        href={msg.downloadUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        sx={{
+          color: '#fff',
+          borderColor: '#9333ea',
+          '&:hover': {
+            borderColor: '#ec4899',
+            background: 'rgba(255, 255, 255, 0.1)',
+          },
+        }}
+      >
+        Download Transformed Dataset
+      </Button>
+    ) : (
+      msg.text.split('\n').map((line, index) => (
+        <p key={index}>{line}</p>
+      ))
+    )}
+  </MessageBubble>
+</Box>
   ))}
    <div ref={messagesEndRef} />
 </MessagesContainer>
@@ -456,13 +496,19 @@ const Chatx: React.FC = () => {
                 sx: { borderRadius: 2 }
               }}
             />
-            <GradientButton 
-              variant="contained" 
+            {isLoading ? (
+            <GradientButton disabled variant="contained">
+              Loading...
+            </GradientButton>
+          ) : (
+            <GradientButton
+              variant="contained"
               endIcon={<SendIcon />}
               onClick={handleSendMessage}
             >
               Send
             </GradientButton>
+          )}
           </Box>
         </ChatContainer>
       </Container>
