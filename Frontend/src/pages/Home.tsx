@@ -52,7 +52,7 @@ function Home() {
   const navigate = useNavigate();
 
   const goToChat = () => {
-    navigate('/chat');
+    navigate('/Chaty');
   };
 
   return (
@@ -96,7 +96,7 @@ function Home() {
                     >
                       <button 
                         onClick={goToChat} 
-                        className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-gradient-to-r from-indigo-600 via-purple-500 to-pink-500 hover:from-indigo-700 hover:via-purple-600 hover:to-pink-600 transition-all duration-200 md:py-4 md:text-lg md:px-10"
+                        className="w-full flex items-center justify-center px-8 py-3 border border-black text-base font-medium rounded-md text-white bg-gradient-to-r from-indigo-600 via-purple-500 to-pink-500 hover:from-indigo-700 hover:via-purple-600 hover:to-pink-600 transition-all duration-200 md:py-4 md:text-lg md:px-10"
                       >
                         Try it Now
                         <ChevronRight className="ml-2 h-5 w-5" />
@@ -107,7 +107,7 @@ function Home() {
                       whileTap={{ scale: 0.95 }}
                       className="mt-3 sm:mt-0 sm:ml-3"
                     >
-                      <button className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 transition-colors duration-200 md:py-4 md:text-lg md:px-10">
+                      <button className="w-full flex items-center justify-center px-8 py-3 border border-black text-base font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 transition-colors duration-200 md:py-4 md:text-lg md:px-10">
                         View Demo
                       </button>
                     </motion.div>

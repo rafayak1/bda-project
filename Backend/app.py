@@ -15,6 +15,10 @@ import bcrypt
 import json
 import requests
 import re
+import matplotlib
+matplotlib.use('Agg')  # ✅ Non-GUI backend set first
+
+import matplotlib.pyplot as plt  # ✅ Must be imported AFTER backend
 
 
 # Initialize Flask app
@@ -49,13 +53,25 @@ login_manager.login_view = "login"
 firestore_client = firestore.Client()
 storage_client = storage.Client()
 
+def clean_ai_code(code: str):
+    code = code.strip("` \n")
+    code = code.replace("python", "").strip()
+
+    code = re.sub(r"import\s*([a-zA-Z0-9_]+)", r"import \1", code)
+    code = re.sub(r"from\s+([a-zA-Z0-9_.]+)\s+import\s+([a-zA-Z0-9_,\s]+)", r"from \1 import \2", code)
+
+    lines = code.split('\n')
+    stripped_lines = [line.strip() for line in lines if line.strip()]
+    return '\n'.join(stripped_lines)
+
 def is_likely_transformation(prompt: str) -> bool:
     keywords = ['remove column', 'rename column', 'filter rows', 'drop', 'convert', 'fill', 'encode', 'impute', 
                 'group by', 'pivot', 'merge', 'join', 'concat', 'stack', 'unstack', 'sort', 'sample', 
                 'drop duplicates', 'replace', 'map', 'apply', 'query', 'columns', 'size', 'shape',
                 'head', 'tail', 'describe', 'info', 'value_counts', 'unique', 'isna', 'notna',
                 'astype', 'to_datetime', 'to_numeric', 'to_string', 'to_csv', 'to_excel', 'to_json',
-                'to_html', 'to_sql', 'to_dict', 'to_clipboard', 'to_feather', 'to_parquet', 'column']
+                'to_html', 'to_sql', 'to_dict', 'to_clipboard', 'to_feather', 'to_parquet', 'column', 
+                'filter', 'remove', 'add', 'insert', 'update', 'change', 'modify', 'transform', 'create']
     return any(kw in prompt.lower() for kw in keywords)
 
 import requests
@@ -79,7 +95,7 @@ def call_openrouter(prompt, df=None, mode="transform"):
 
         system_prompt = (
             "Your name is BuffBot and you are made for students of University of Colorado Boulder\n"
-            "You have been created by Rafay, Samiksha, Harsh and Mohit for their Big Data Analytics Course\n"
+            "You have been created by Rafay, Samiksha, Harsh and Mohit for their Big Data Architecture Course\n"
             "You're a data scientist. Return only executable pandas code to transform a DataFrame named df.\n"
             f"Here are the columns:\n{columns}\n\n"
             f"Here is a preview:\n{preview}"
@@ -92,7 +108,7 @@ def call_openrouter(prompt, df=None, mode="transform"):
         preview = df.head(5).to_dict(orient='records') if df is not None else []
         system_prompt = (
             "Your name is BuffBot and you are made for students of University of Colorado Boulder\n"
-            "You have been created by Rafay, Samiksha, Harsh and Mohit for their Big Data Analytics Course\n"
+            "You have been created by Rafay, Samiksha, Harsh and Mohit for their Big Data Architecture Course\n"
             "You're an intelligent and friendly data assistant. Help users with data-related questions, "
             "and feel free to chat casually. Be helpful and conversational.\n"
             f"Here are the columns:\n{columns}\n\n"
@@ -102,6 +118,7 @@ def call_openrouter(prompt, df=None, mode="transform"):
 
     body = {
         "model": "openrouter/quasar-alpha",
+        "temperature": 0.2,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
@@ -408,50 +425,38 @@ def transform_dataset():
         user_id = request.user_id
         data = request.json
         command = data.get("command", "").strip()
-
         print(f"Received command: {command}")
         if not command:
             return jsonify({"message": "No command provided"}), 400
 
-        # Fetch dataset info
+        # Load user & dataset
         user_ref = firestore_client.collection('users').document(user_id)
         user_data = user_ref.get().to_dict()
         bucket_name = user_data.get('bucket')
         current_dataset = user_data.get('dataset')
         file_type = user_data.get('file_type', 'csv')
-
         if not current_dataset:
             return jsonify({"message": "No dataset found. Please upload a dataset first."}), 400
 
-        # Handle dataset switching
         if command.lower() == "yes":
-            new_dataset_name = user_data.get('updated_dataset')
-            if not new_dataset_name:
-                return jsonify({"message": "No updated dataset found. Please apply a transformation first."}), 400
-
-            try:
-                bucket = storage_client.get_bucket(bucket_name)
-                old_blob = bucket.blob(current_dataset)
-                if old_blob.exists():
-                    old_blob.delete()
-                user_ref.update({'dataset': new_dataset_name, 'updated_dataset': None})
-                return jsonify({"message": "Using updated dataset for further transformations."}), 200
-            except Exception as e:
-                return jsonify({"message": f"Failed to switch dataset: {e}"}), 500
+            new_dataset = user_data.get('updated_dataset')
+            if not new_dataset:
+                return jsonify({"message": "No updated dataset found."}), 400
+            bucket = storage_client.get_bucket(bucket_name)
+            old_blob = bucket.blob(current_dataset)
+            if old_blob.exists():
+                old_blob.delete()
+            user_ref.update({'dataset': new_dataset, 'updated_dataset': None})
+            return jsonify({"message": "Using updated dataset."}), 200
 
         if command.lower() == "no":
             user_ref.update({'updated_dataset': None})
-            user_data = user_ref.get().to_dict()  # <-- important to reload dataset info
-            return jsonify({"message": "Continuing with original dataset."}), 2000
+            user_data = user_ref.get().to_dict()
+            return jsonify({"message": "Continuing with original dataset."}), 200
 
-        # Load the dataset
-        # Check if user said no to updated dataset previously
-        use_updated = user_data.get('updated_dataset') and command.lower() != "no"
-        dataset_to_use = user_data.get('updated_dataset') if use_updated else current_dataset
+        dataset_to_use = user_data.get('updated_dataset') or current_dataset
         delimiter = ',' if file_type == 'csv' else '\t'
         df = load_dataset(bucket_name, dataset_to_use, delimiter=delimiter)
-
-        # Smart descriptive command checks
         lower_cmd = command.lower()
 
         # Descriptive command handlers
@@ -459,7 +464,7 @@ def transform_dataset():
             cols = df.columns.tolist()
             return jsonify({"message": "Your dataset has the following columns:\n\n" + "\n".join([f"● {col}" for col in cols])}), 200
         elif match_preview_command(lower_cmd):
-            return jsonify({"message": f"Here's a preview of your dataset:\n\n{json.dumps(df.head(5).to_dict(orient='records'), indent=2)}"}), 200
+            return jsonify({"message": f"Here's a preview:\n\n{json.dumps(df.head(5).to_dict(orient='records'), indent=2)}"}), 200
         elif match_head_command(lower_cmd):
             return jsonify({"message": str(df.head().to_string(index=False))}), 200
         elif match_tail_command(lower_cmd):
@@ -467,7 +472,14 @@ def transform_dataset():
         elif match_size_command(lower_cmd):
             return jsonify({"message": f"Dataset Dimensions: Rows: {df.shape[0]}, Columns: {df.shape[1]}"}), 200
         elif match_describe_command(lower_cmd):
-            return jsonify({"message": str(df.describe(include='all').to_string())}), 200
+            desc_df = df.describe().reset_index()
+            return jsonify({
+                "message": "Here's a statistical summary of your dataset.",
+                "table": {
+                    "columns": desc_df.columns.tolist(),
+                    "rows": desc_df.fillna("").to_dict(orient='records')
+                }
+            }), 200
         elif lower_cmd == "commands":
             return jsonify({"message": "Here are the commands you can use:\n\n"
                                        "● remove column <column_name>\n"
@@ -476,55 +488,50 @@ def transform_dataset():
                                        "● columns\n"
                                        "● size\n"}), 200
 
-        # # === AI Chat (not a transformation) ===
-        # if not is_likely_transformation(command):
-        #     ai_response = call_openrouter(command, df, mode="chat")
-        #     return jsonify({"message": ai_response}), 200
-
-        # # === AI Code Generation ===
-        # ai_code = call_openrouter(command, df, mode="transform")
-        # cleaned_code = clean_ai_code(ai_code)
-        # print("AI GENERATED CODE:\n", cleaned_code)
-
-        # if not ai_code.strip() or ai_code.strip().startswith("#"):
-        #     return jsonify({"message": f"Sorry, I couldn't generate code for that command:\n\n{ai_code}"}), 200
-
-        # # Execute generated code safely
-        # try:
-        #     local_vars = {'df': df.copy()}
-        #     exec(cleaned_code, {}, local_vars)
-        #     transformed_df = local_vars['df']
-        # except Exception as exec_err:
-        #     return jsonify({"message": f"Failed to execute AI code:\n\n{ai_code}\n\nError: {exec_err}"}), 500
-
-        # # Save transformed version
-        # transformed_name = f"transformed_{current_dataset}"
-        # save_dataset(bucket_name, transformed_name, transformed_df)
-        # user_ref.update({'updated_dataset': transformed_name})
-
-        # blob = storage_client.get_bucket(bucket_name).blob(transformed_name)
-        # download_url = blob.generate_signed_url(expiration=datetime.timedelta(hours=1))
-
-        # return jsonify({
-        #     "message": "Transformation applied successfully.",
-        #     "download_url": download_url,
-        #     "followup_message": "Do you want to use this updated dataset for further transformations? Reply with yes or no."
-        # }), 200
-        # 1. Ask OpenRouter for code regardless of tone
-                # 0. Check if the AI response is clearly casual (no code) — like "thanks"
+        # Handle non-transformational queries (chat)
         if not is_likely_transformation(command):
             ai_response = call_openrouter(command, df, mode="chat")
-            if not any(keyword in ai_response.lower() for keyword in ['df =', 'df.', 'df[']):
-                return jsonify({"message": ai_response}), 200
-        ai_code = call_openrouter(command, df, mode="transform")
-        ai_code = ai_code.strip()
-        if ai_code.startswith("```"):
-            ai_code = ai_code.strip("`")  # removes all backticks
-            ai_code = ai_code.replace("python", "", 1).strip()
+            stripped = ai_response.strip()
+            if any(stripped.startswith(p) for p in ['df.', 'df.describe', 'df.shape']):
+                try:
+                    local_vars = {'df': df.copy()}
+                    result = eval(stripped, {}, local_vars)
+                    if isinstance(result, (pd.DataFrame, pd.Series)):
+                        return jsonify({"message": str(result.to_string())}), 200
+                    return jsonify({"message": str(result)}), 200
+                except Exception:
+                    return jsonify({"message": ai_response}), 200
+            return jsonify({"message": ai_response}), 200
+
+        # === AI Transformation Code ===
+        ai_code = clean_ai_code(call_openrouter(command, df, mode="transform"))
+        ai_code = ai_code.replace("plt.show()", "")
         print("AI GENERATED CODE:\n", ai_code)
 
-        # 2. Check if AI returned runnable code
-        if 'df =' in ai_code or 'df.' in ai_code or 'df[':  # optional filter
+        if any(keyword in ai_code for keyword in ["plt.", "df.plot", "df.plot.", "df.plot("]):
+            try:
+                local_vars = {'df': df.copy()}
+                exec(ai_code, {}, local_vars)
+
+                image_path = "/tmp/figure.png"
+                plt.savefig(image_path)
+                plt.close()
+
+                blob = storage_client.bucket(bucket_name).blob("figure.png")
+                blob.upload_from_filename(image_path)
+                image_url = blob.generate_signed_url(expiration=datetime.timedelta(hours=1))
+
+                return jsonify({
+                    "message": "Visualization generated 📊",
+                    "image_url": image_url
+                }), 200
+
+            except Exception as viz_err:
+                return jsonify({
+                    "message": f"Failed to generate visualization:\n\n{ai_code}\n\nError: {viz_err}"}
+                ), 500
+
+        if 'df =' in ai_code or 'df.' in ai_code or 'df[' in ai_code:
             try:
                 local_vars = {'df': df.copy()}
                 exec(ai_code, {}, local_vars)
@@ -534,7 +541,6 @@ def transform_dataset():
                     "message": f"AI generated code, but it failed to execute:\n\n{ai_code}\n\nError: {exec_err}"
                 }), 500
 
-            # Save & return dataset
             transformed_name = f"transformed_{current_dataset}"
             save_dataset(bucket_name, transformed_name, transformed_df)
             user_ref.update({'updated_dataset': transformed_name})
@@ -548,7 +554,6 @@ def transform_dataset():
                 "followup_message": "Want to continue using this cleaned dataset? Reply with yes or no."
             }), 200
 
-        # 3. If no code was found or no transformation occurred
         return jsonify({"message": ai_code}), 200
 
     except requests.exceptions.HTTPError as e:

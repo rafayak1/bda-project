@@ -160,7 +160,7 @@ function Signup() {
                   onChange={handleChange}
                   className={`appearance-none block w-full px-3 py-2 border ${
                     errors.name ? 'border-red-500' : 'border-zinc-800'
-                  } bg-black/50 backdrop-blur-sm rounded-lg shadow-sm placeholder-zinc-500 text-white focus:outline-none focus:ring-2 focus:ring-white/25 focus:border-transparent transition-colors`}
+                  } bg-black/50 backdrop-blur-sm rounded-lg shadow-sm placeholder-zinc-500 text-white focus:outline-none focus:ring-2 focus:ring-white/25 focus:border-black transition-colors`}
                   placeholder="Enter your full name"
                 />
                 {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
@@ -182,7 +182,7 @@ function Signup() {
                   onChange={handleChange}
                   className={`appearance-none block w-full px-3 py-2 border ${
                     errors.email ? 'border-red-500' : 'border-zinc-800'
-                  } bg-black/50 backdrop-blur-sm rounded-lg shadow-sm placeholder-zinc-500 text-white focus:outline-none focus:ring-2 focus:ring-white/25 focus:border-transparent transition-colors`}
+                  } bg-black/50 backdrop-blur-sm rounded-lg shadow-sm placeholder-zinc-500 text-white focus:outline-none focus:ring-2 focus:ring-white/25 focus:border-black transition-colors`}
                   placeholder="Enter your email"
                 />
                 {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
@@ -204,7 +204,7 @@ function Signup() {
                   onChange={handleChange}
                   className={`appearance-none block w-full px-3 py-2 border ${
                     errors.password ? 'border-red-500' : 'border-zinc-800'
-                  } bg-black/50 backdrop-blur-sm rounded-lg shadow-sm placeholder-zinc-500 text-white focus:outline-none focus:ring-2 focus:ring-white/25 focus:border-transparent transition-colors`}
+                  } bg-black/50 backdrop-blur-sm rounded-lg shadow-sm placeholder-zinc-500 text-white focus:outline-none focus:ring-2 focus:ring-white/25 focus:border-black transition-colors`}
                   placeholder="Create a password"
                 />
                 <button
@@ -237,7 +237,7 @@ function Signup() {
                   onChange={handleChange}
                   className={`appearance-none block w-full px-3 py-2 border ${
                     errors.confirmPassword ? 'border-red-500' : 'border-zinc-800'
-                  } bg-black/50 backdrop-blur-sm rounded-lg shadow-sm placeholder-zinc-500 text-white focus:outline-none focus:ring-2 focus:ring-white/25 focus:border-transparent transition-colors`}
+                  } bg-black/50 backdrop-blur-sm rounded-lg shadow-sm placeholder-zinc-500 text-white focus:outline-none focus:ring-2 focus:ring-white/25 focus:border-black transition-colors`}
                   placeholder="Confirm your password"
                 />
                 {errors.confirmPassword && (
@@ -250,7 +250,7 @@ function Signup() {
           <div>
             <button
               type="submit"
-              className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-gradient-to-r from-indigo-600 via-purple-500 to-pink-500 hover:from-indigo-700 hover:via-purple-600 hover:to-pink-600 transition-all duration-200 md:py-4 md:text-lg md:px-10"
+              className="mb-2 w-full flex items-center justify-center px-8 py-3 border border-black text-base font-medium rounded-md text-white bg-gradient-to-r from-indigo-600 via-purple-500 to-pink-500 hover:from-indigo-700 hover:via-purple-600 hover:to-pink-600 transition-all duration-200 md:py-4 md:text-lg md:px-10"
             >
            
               Sign up

@@ -14,6 +14,12 @@ import { useNavigate } from 'react-router-dom';
 import { v4 as uuid } from 'uuid';
 import { DataGrid } from '@mui/x-data-grid';
 import { Dialog, DialogTitle, DialogContent, CircularProgress } from '@mui/material';
+import Table from '@mui/material/Table';
+import TableBody from '@mui/material/TableBody';
+import TableCell from '@mui/material/TableCell';
+import TableContainer from '@mui/material/TableContainer';
+import TableHead from '@mui/material/TableHead';
+import TableRow from '@mui/material/TableRow';
 
 // Comment out these Firebase imports
 // import { auth } from '../firebase';
@@ -129,6 +135,8 @@ interface Message {
   isFile?: boolean;
   fileName?: string;
   downloadUrl?: string;
+  tableData?: { columns: string[]; rows: (string | number)[][] } | null;
+  imageUrl?: string;
 }
 
 const Chatx: React.FC = () => {
@@ -159,6 +167,12 @@ const Chatx: React.FC = () => {
 
 const [isLoading, setIsLoading] = useState(false);
 const [awaitingResponse, setAwaitingResponse] = useState(false);
+const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+useEffect(() => {
+  const token = localStorage.getItem('token');
+  setIsLoggedIn(!!token);
+}, []);
 
 const checkDatasetStatus = async () => {
   try {
@@ -188,94 +202,6 @@ const checkDatasetStatus = async () => {
   }
 };
 
-// const handleSendMessage = async () => {
-//   if (!message.trim()) return;
-
-//   const inputText = message;
-//   setMessage('');
-//   setIsLoading(true);
-
-//   const newUserMessage: Message = {
-//     id: uuid(),
-//     text: inputText,
-//     isUser: true,
-//     timestamp: new Date(),
-//   };
-//   setMessages((prev) => [...prev, newUserMessage]);
-
-//   const tryTransform = async (retry = 0) => {
-//     try {
-//       const response = await axiosInstance.post(
-//         '/transform',
-//         { command: inputText },
-//         {
-//           headers: {
-//             Authorization: `Bearer ${localStorage.getItem('token')}`,
-//           },
-//           withCredentials: true,
-//         }
-//       );
-
-//       const { message: botText, download_url, followup_message } = response.data;
-
-//       const responseMessages: Message[] = [];
-
-//       responseMessages.push({
-//         id: uuid(),
-//         text: botText,
-//         isUser: false,
-//         timestamp: new Date(),
-//         ...(download_url && { downloadUrl: download_url }),
-//       });
-
-//       if (download_url) {
-//         responseMessages.push({
-//           id: uuid(),
-//           text: '',
-//           isUser: false,
-//           timestamp: new Date(),
-//           isFile: true,
-//           fileName: download_url, // actual URL goes here
-//         });
-//       }
-
-//       if (followup_message) {
-//         responseMessages.push({
-//           id: uuid(),
-//           text: followup_message,
-//           isUser: false,
-//           timestamp: new Date(),
-//         });
-//         setAwaitingResponse(true);
-//       }
-
-//       setMessages((prev) => [...prev, ...responseMessages]);
-//     } catch (err: any) {
-//       if (retry < 2) {
-//         await tryTransform(retry + 1); // try again
-//       } else {
-//         setMessages((prev) => [
-//           ...prev,
-//           {
-//             id: uuid(),
-//             text: err?.response?.data?.message || 'Something went wrong. Please try again later.',
-//             isUser: false,
-//             timestamp: new Date(),
-//           },
-//         ]);
-//       }
-//     } finally {
-//       setIsLoading(false);
-//     }
-//   };
-
-//   if (awaitingResponse && (inputText.toLowerCase() === 'yes' || inputText.toLowerCase() === 'no')) {
-//     setAwaitingResponse(false);
-//   }
-
-//   await tryTransform();
-// };
-
 const handleSendMessage = async () => {
   if (!message.trim()) return;
 
@@ -300,17 +226,18 @@ const handleSendMessage = async () => {
         withCredentials: true,
       }
     );
-
-    const { message: botText, download_url, followup_message } = response.data;
+    const { message: botText, download_url, followup_message, image_url, table } = response.data;
 
     const botResponse: Message = {
       id: (Date.now() + 1).toString(),
-      text: botText || '', // ensure it's not undefined
+      text: botText || (image_url ? 'Here’s your visualization 📈' : ''),
       isUser: false,
       timestamp: new Date(),
-      isFile: !!download_url, // show download button when download_url exists
+      isFile: !!download_url,
       fileName: download_url ? 'Download Transformed Dataset' : undefined,
       downloadUrl: download_url,
+      imageUrl: image_url, 
+      tableData: table,
     };
 
     const messagesToAdd: Message[] = [botResponse];
@@ -469,7 +396,7 @@ const handlePreviewDataset = async () => {
 </Link>
             <div className="flex items-center space-x-8">
               
-             
+            {isLoggedIn && (
               <motion.button 
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -480,7 +407,7 @@ const handlePreviewDataset = async () => {
                 <span className="font-medium text-white hover:text-zinc-300 transition-colors">
                 Logout
                 </span>
-              </motion.button>
+              </motion.button>)}
             </div>
           </div>
         </div>
@@ -565,37 +492,65 @@ const handlePreviewDataset = async () => {
           
 
           <MessagesContainer sx={{ display: 'flex', flexDirection: 'column' }}>
-  {messages.map((msg) => (
-    <Box
-  key={msg.id}
-  sx={{ display: 'flex', justifyContent: msg.isUser ? 'flex-end' : 'flex-start' }}
->
-  <MessageBubble isUser={msg.isUser}>
-  {msg.downloadUrl ? (
-  <Button
-    variant="outlined"
-    href={msg.downloadUrl}
-    target="_blank"
-    rel="noopener noreferrer"
-    sx={{
-      color: '#fff',
-      borderColor: '#9333ea',
-      '&:hover': {
-        borderColor: '#ec4899',
-        background: 'rgba(255, 255, 255, 0.1)',
-      },
-    }}
+          {messages.map((msg) => (
+  <Box
+    key={msg.id}
+    sx={{ display: 'flex', justifyContent: msg.isUser ? 'flex-end' : 'flex-start' }}
   >
-    Download Transformed Dataset
-  </Button>
-) : (
-  msg.text.split('\n').map((line, index) => (
-    <p key={index}>{line}</p>
-  ))
-)}
-  </MessageBubble>
-</Box>
-  ))}
+    <MessageBubble isUser={msg.isUser}>
+      {msg.downloadUrl ? (
+        <Button
+          variant="outlined"
+          href={msg.downloadUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          sx={{
+            color: '#fff',
+            borderColor: '#9333ea',
+            '&:hover': {
+              borderColor: '#ec4899',
+              background: 'rgba(255, 255, 255, 0.1)',
+            },
+          }}
+        >
+          Download Transformed Dataset
+        </Button>
+      ) : msg.imageUrl ? (
+        <img src={msg.imageUrl} alt="Generated Visualization" style={{ maxWidth: '100%' }} />
+      ) : msg.tableData ? (
+        // Your existing MUI table block here...
+        <Box sx={{ mt: 1 }}>
+          <TableContainer component={Paper} sx={{ backgroundColor: '#121212' }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  {msg.tableData.columns.map((col, idx) => (
+                    <TableCell key={idx} sx={{ color: 'white', fontWeight: 'bold' }}>
+                      {col}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {msg.tableData.rows.map((row, rowIdx) => (
+                  <TableRow key={rowIdx}>
+                    {Object.values(row).map((cell, colIdx) => (
+                      <TableCell key={colIdx} sx={{ color: 'white' }}>
+                        {cell}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Box>
+      ) : (
+        msg.text.split('\n').map((line, index) => <p key={index}>{line}</p>)
+      )}
+    </MessageBubble>
+  </Box>
+))}
    <div ref={messagesEndRef} />
 </MessagesContainer>
 
