@@ -21,6 +21,12 @@ matplotlib.use('Agg')  # ✅ Non-GUI backend set first
 import matplotlib.pyplot as plt  # ✅ Must be imported AFTER backend
 from io import StringIO
 import sys
+import black
+import subprocess
+import tempfile
+import re
+import logging
+
 
 
 # Initialize Flask app
@@ -51,9 +57,39 @@ app.config['SESSION_COOKIE_SECURE'] = True
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 firestore_client = firestore.Client()
 storage_client = storage.Client()
+
+
+
+def detect_undefined_names(code):
+    """
+    Use flake8 to detect undefined variables in the provided code.
+    Returns a list of variable names that are used but not defined.
+    """
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as temp_file:
+        temp_file.write(code)
+        temp_path = temp_file.name
+
+    try:
+        result = subprocess.run(
+            ["flake8", "--select=F821", temp_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        lines = result.stdout.strip().splitlines()
+        undefined = []
+        for line in lines:
+            match = re.search(r"undefined name '(\w+)'", line)
+            if match:
+                undefined.append(match.group(1))
+        return undefined
+    finally:
+        os.unlink(temp_path)
 
 def clean_ai_code(code: str):
     code = code.strip("` \n")
@@ -70,11 +106,24 @@ def is_likely_transformation(prompt: str):
     keywords = ['remove column', 'rename column', 'filter rows', 'drop', 'convert', 'fill', 'encode', 'impute', 
                 'group by', 'pivot', 'merge', 'join', 'concat', 'stack', 'unstack', 'sort', 'sample', 
                 'drop duplicates', 'replace', 'map', 'apply', 'query', 'columns', 'size', 'shape',
-                'head', 'tail', 'describe', 'info', 'value_counts', 'unique', 'isna', 'notna',
+                'head', 'tail', 'info', 'value_counts', 'unique', 'isna', 'notna',
                 'astype', 'to_datetime', 'to_numeric', 'to_string', 'to_csv', 'to_excel', 'to_json',
                 'to_html', 'to_sql', 'to_dict', 'to_clipboard', 'to_feather', 'to_parquet', 'column', 
-                'filter', 'remove', 'add', 'insert', 'update', 'change', 'modify', 'transform', 'create']
+                'filter', 'remove', 'add', 'insert', 'update', 'change', 'modify', 'transform', 'create', 'rename', 'prepare']
     return any(kw in prompt.lower() for kw in keywords)
+
+def format_code(code: str):
+    try:
+        return black.format_str(code, mode=black.FileMode())
+    except Exception as e:
+        print(f"Black formatting failed: {e}")
+        return code  # fallback to original
+
+def ensure_dataframe_has_id(df):
+    if 'id' not in df.columns:
+        df = df.copy()
+        df.insert(0, 'id', range(1, len(df) + 1))  # Inject id column at start
+    return df
 
 
 def call_openrouter(prompt, df=None, mode="transform"):
@@ -636,6 +685,25 @@ def run_custom_code():
 
     if not code:
         return jsonify({"message": "No code provided"}), 400
+    code = format_code(code)
+    # Detect missing symbols
+    undefined_names = detect_undefined_names(code)
+
+    # Add common imports for undefined names
+    common_imports = {
+        'pd': 'import pandas as pd',
+        'np': 'import numpy as np',
+        'plt': 'import matplotlib.pyplot as plt',
+        'sns': 'import seaborn as sns',
+        'train_test_split': 'from sklearn.model_selection import train_test_split',
+        'LinearRegression': 'from sklearn.linear_model import LinearRegression',
+        'RandomForestClassifier': 'from sklearn.ensemble import RandomForestClassifier',
+        'StandardScaler': 'from sklearn.preprocessing import StandardScaler'
+    }
+
+    for symbol in undefined_names:
+        if symbol in common_imports:
+            code = f"{common_imports[symbol]}\n" + code
 
     # Fetch dataset info
     user_ref = firestore_client.collection('users').document(user_id)
@@ -670,9 +738,24 @@ def run_custom_code():
                 )
                 if result is not None:
                     print(result)
+                logger.info(code)
+
+                plot_patterns = [
+                    r"plt\s*\.",                        # matplotlib
+                    r"df\s*(?:\[[^\]]+\]|\.\w+)?\s*\.plot\s*\(",
+                    r"df\s*(?:\[[^\]]+\]|\.\w+)?\s*\.boxplot\s*\(",
+                    r"df\s*(?:\[[^\]]+\]|\.\w+)?\s*\.hist\s*\(",
+                    r"df\s*(?:\[[^\]]+\]|\.\w+)?\s*\.bar\s*\(",
+                    r"df\s*(?:\[[^\]]+\]|\.\w+)?\s*\.pie\s*\(",
+                    r"df\s*(?:\[[^\]]+\]|\.\w+)?\s*\.scatter\s*\(",
+                    r"df\s*(?:\[[^\]]+\]|\.\w+)?\s*\.line\s*\(",
+                ]
+
+                plot_detected = any(re.search(pattern, code) for pattern in plot_patterns)
 
                 # ✅ Save plot if code contains matplotlib
-                if "plt." in code:
+                if plot_detected:
+                    logger.info("Plotting detected, saving figure...")
                     import matplotlib
                     matplotlib.use('Agg')
                     import matplotlib.pyplot as plt
@@ -700,6 +783,7 @@ def run_custom_code():
         result_df = local_vars.get('df')
         response["generated_code"] = code
         if isinstance(result_df, pd.DataFrame) and printed_output == "":
+            result_df = ensure_dataframe_has_id(result_df)
             response["table"] = {
                 "columns": result_df.columns.tolist(),
                 "rows": result_df.fillna("").to_dict(orient='records')
@@ -765,6 +849,7 @@ def preview_dataset():
         delimiter = ',' if file_type == 'csv' else '\t'
 
         df = load_dataset(user_data['bucket'], dataset_name, delimiter=delimiter)
+        df = ensure_dataframe_has_id(df)
         preview_data = df.head(100)
         return jsonify({
             "columns": preview_data.columns.tolist(),

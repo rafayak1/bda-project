@@ -21,6 +21,7 @@ import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import CodeExecutor from '../components/CodeExecutor';
+import ReactMarkdown from 'react-markdown';
 
 // Comment out these Firebase imports
 // import { auth } from '../firebase';
@@ -488,8 +489,7 @@ const handlePreviewDataset = async () => {
           >
             Speak, Modify, Achieve: Your Dataset, Refined by Intelligent Conversation.
           </Typography>
-        </Box>
-        
+        </Box>  
         <ChatContainer>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
             <Typography 
@@ -589,7 +589,7 @@ const handlePreviewDataset = async () => {
           </TableContainer>
         </Box>
       ) : (
-        msg.text.split('\n').map((line, index) => <p key={index}>{line}</p>)
+        <ReactMarkdown>{msg.text}</ReactMarkdown>
       )}
     </MessageBubble>
   </Box>
