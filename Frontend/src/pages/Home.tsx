@@ -77,7 +77,7 @@ function Home() {
                     className="text-4xl tracking-tight font-extrabold sm:text-5xl md:text-6xl text-white"
                   >
                     <span className="block mb-2">Transform Your Data with</span>
-                    <span className="block gradient-text">AI-Powered Intelligence</span>
+                    <span className="block gradient-text">the help of BuffBot</span>
                   </motion.h1>
                   <motion.p 
                     variants={itemVariants}
@@ -258,7 +258,7 @@ function Home() {
               className="flex items-center"
             >
               <Database className="h-8 w-8 text-white" />
-              <span className="ml-2 text-xl font-bold text-white">DataTransform AI</span>
+              <span className="ml-2 text-xl font-bold text-white">DataBuff</span>
             </motion.div>
             <div className="flex space-x-6">
               <motion.a 
@@ -284,7 +284,7 @@ function Home() {
             viewport={{ once: true }}
             className="mt-8 border-t border-gray-800 pt-8"
           >
-            <p className="text-center text-gray-400">&copy; 2024 DataTransform AI. All rights reserved.</p>
+            <p className="text-center text-gray-400">&copy; 2025 DataBuff. All rights reserved.</p>
           </motion.div>
         </div>
       </footer>

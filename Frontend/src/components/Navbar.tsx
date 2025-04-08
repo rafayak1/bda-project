@@ -22,7 +22,7 @@ function Navbar() {
               className="flex items-center"
             >
               <Database className="h-8 w-8 text-white" />
-              <span className="ml-2 text-xl font-bold text-white">DataTransform AI</span>
+              <span className="ml-2 text-xl font-bold text-white">DataBuff</span>
             </motion.div>
             <div className="flex items-center space-x-8">
               <motion.a 
@@ -39,13 +39,15 @@ function Navbar() {
               >
                 How it Works
               </motion.a>
-              <motion.button 
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors duration-200"
-              >
-                Get Started
-              </motion.button>
+              <Link to="/signup">
+  <motion.button 
+    whileHover={{ scale: 1.05 }}
+    whileTap={{ scale: 0.95 }}
+    className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors duration-200"
+  >
+    Get Started
+  </motion.button>
+</Link>
               <motion.button 
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}

@@ -171,10 +171,9 @@ const checkDatasetStatus = async () => {
 
     const { datasetExists, name } = response.data;
     setHasUploaded(datasetExists);
-
     const welcomeMessage = datasetExists
-      ? `Welcome back, ${name}! I've found your previously uploaded dataset.\n\nYou can begin performing transformations. Type "commands" to see supported instructions.`
-      : `Hello, ${name}! Welcome to Intelligent Service.\n\nPlease upload a dataset to get started.\n\nType "commands" to see what you can do.`;
+      ? `🎉 Welcome back, ${name}! I hope you enjoyed your DataBuff experience last time! BuffBot is locked, loaded, and ready to crunch data for you.\n\nYour previously uploaded dataset is all set. Just type a command like "remove column Age" or "filter rows where Salary > 50000" to get started.\n\nNeed inspiration? Type "commands" to see everything I can do — or just say hi. Let's make your data legendary! 💪📊`
+      : `👋 Hey there, ${name}! Welcome to DataBuff! I'm BuffBot, your data-savvy sidekick here at CU Boulder.\n\nBefore we dive into powerful transformations and clever insights, upload a dataset to get the ball rolling.\n\nOnce it's in, you can say things like "show me the columns", "drop missing values", or even ask me to do AI-powered cleaning.\n\nType "commands" anytime to see my powers. Let's turn data into decisions, Buff-style! 🦬⚡`;
 
     setMessages([
       {
@@ -189,92 +188,154 @@ const checkDatasetStatus = async () => {
   }
 };
 
+// const handleSendMessage = async () => {
+//   if (!message.trim()) return;
+
+//   const inputText = message;
+//   setMessage('');
+//   setIsLoading(true);
+
+//   const newUserMessage: Message = {
+//     id: uuid(),
+//     text: inputText,
+//     isUser: true,
+//     timestamp: new Date(),
+//   };
+//   setMessages((prev) => [...prev, newUserMessage]);
+
+//   const tryTransform = async (retry = 0) => {
+//     try {
+//       const response = await axiosInstance.post(
+//         '/transform',
+//         { command: inputText },
+//         {
+//           headers: {
+//             Authorization: `Bearer ${localStorage.getItem('token')}`,
+//           },
+//           withCredentials: true,
+//         }
+//       );
+
+//       const { message: botText, download_url, followup_message } = response.data;
+
+//       const responseMessages: Message[] = [];
+
+//       responseMessages.push({
+//         id: uuid(),
+//         text: botText,
+//         isUser: false,
+//         timestamp: new Date(),
+//         ...(download_url && { downloadUrl: download_url }),
+//       });
+
+//       if (download_url) {
+//         responseMessages.push({
+//           id: uuid(),
+//           text: '',
+//           isUser: false,
+//           timestamp: new Date(),
+//           isFile: true,
+//           fileName: download_url, // actual URL goes here
+//         });
+//       }
+
+//       if (followup_message) {
+//         responseMessages.push({
+//           id: uuid(),
+//           text: followup_message,
+//           isUser: false,
+//           timestamp: new Date(),
+//         });
+//         setAwaitingResponse(true);
+//       }
+
+//       setMessages((prev) => [...prev, ...responseMessages]);
+//     } catch (err: any) {
+//       if (retry < 2) {
+//         await tryTransform(retry + 1); // try again
+//       } else {
+//         setMessages((prev) => [
+//           ...prev,
+//           {
+//             id: uuid(),
+//             text: err?.response?.data?.message || 'Something went wrong. Please try again later.',
+//             isUser: false,
+//             timestamp: new Date(),
+//           },
+//         ]);
+//       }
+//     } finally {
+//       setIsLoading(false);
+//     }
+//   };
+
+//   if (awaitingResponse && (inputText.toLowerCase() === 'yes' || inputText.toLowerCase() === 'no')) {
+//     setAwaitingResponse(false);
+//   }
+
+//   await tryTransform();
+// };
+
 const handleSendMessage = async () => {
   if (!message.trim()) return;
 
-  const inputText = message;
-  setMessage('');
-  setIsLoading(true);
-
   const newUserMessage: Message = {
-    id: uuid(),
-    text: inputText,
+    id: Date.now().toString(),
+    text: message,
     isUser: true,
     timestamp: new Date(),
   };
   setMessages((prev) => [...prev, newUserMessage]);
+  setMessage('');
+  setIsLoading(true);
 
-  const tryTransform = async (retry = 0) => {
-    try {
-      const response = await axiosInstance.post(
-        '/transform',
-        { command: inputText },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-          withCredentials: true,
-        }
-      );
+  try {
+    const response = await axiosInstance.post(
+      '/transform',
+      { command: message },
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        withCredentials: true,
+      }
+    );
 
-      const { message: botText, download_url, followup_message } = response.data;
+    const { message: botText, download_url, followup_message } = response.data;
 
-      const responseMessages: Message[] = [];
+    const botResponse: Message = {
+      id: (Date.now() + 1).toString(),
+      text: botText || '', // ensure it's not undefined
+      isUser: false,
+      timestamp: new Date(),
+      isFile: !!download_url, // show download button when download_url exists
+      fileName: download_url ? 'Download Transformed Dataset' : undefined,
+      downloadUrl: download_url,
+    };
 
-      responseMessages.push({
-        id: uuid(),
-        text: botText,
+    const messagesToAdd: Message[] = [botResponse];
+
+    if (followup_message) {
+      messagesToAdd.push({
+        id: (Date.now() + 2).toString(),
+        text: followup_message,
         isUser: false,
         timestamp: new Date(),
-        ...(download_url && { downloadUrl: download_url }),
       });
-
-      if (download_url) {
-        responseMessages.push({
-          id: uuid(),
-          text: '',
-          isUser: false,
-          timestamp: new Date(),
-          isFile: true,
-          fileName: download_url, // actual URL goes here
-        });
-      }
-
-      if (followup_message) {
-        responseMessages.push({
-          id: uuid(),
-          text: followup_message,
-          isUser: false,
-          timestamp: new Date(),
-        });
-        setAwaitingResponse(true);
-      }
-
-      setMessages((prev) => [...prev, ...responseMessages]);
-    } catch (err: any) {
-      if (retry < 2) {
-        await tryTransform(retry + 1); // try again
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: uuid(),
-            text: err?.response?.data?.message || 'Something went wrong. Please try again later.',
-            isUser: false,
-            timestamp: new Date(),
-          },
-        ]);
-      }
-    } finally {
-      setIsLoading(false);
     }
-  };
 
-  if (awaitingResponse && (inputText.toLowerCase() === 'yes' || inputText.toLowerCase() === 'no')) {
-    setAwaitingResponse(false);
+    setMessages((prev) => [...prev, ...messagesToAdd]);
+  } catch (err: any) {
+    const errorMessage: Message = {
+      id: Date.now().toString(),
+      text: err.response?.data?.message || 'Something went wrong.',
+      isUser: false,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, errorMessage]);
+  } finally {
+    setIsLoading(false);
   }
-
-  await tryTransform();
 };
 
 const handlePreviewDataset = async () => {
@@ -397,13 +458,15 @@ const handlePreviewDataset = async () => {
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
-            <motion.div 
-              whileHover={{ scale: 1.05 }}
-              className="flex items-center"
-            >
-              <Database className="h-8 w-8 text-white" />
-              <span className="ml-2 text-xl font-bold text-white">DataTransform AI</span>
-            </motion.div>
+          <Link to="/" style={{ textDecoration: 'none' }}>
+  <motion.div 
+    whileHover={{ scale: 1.05 }}
+    className="flex items-center"
+  >
+    <Database className="h-8 w-8 text-white" />
+    <span className="ml-2 text-xl font-bold text-white">DataBuff</span>
+  </motion.div>
+</Link>
             <div className="flex items-center space-x-8">
               
              
@@ -447,7 +510,7 @@ const handlePreviewDataset = async () => {
               mb: 2
             }}
           >
-            DataTransform AI
+            DataBuff
           </Typography>
           <Typography 
             variant="h6" 
@@ -508,28 +571,28 @@ const handlePreviewDataset = async () => {
   sx={{ display: 'flex', justifyContent: msg.isUser ? 'flex-end' : 'flex-start' }}
 >
   <MessageBubble isUser={msg.isUser}>
-    {msg.downloadUrl ? (
-      <Button
-        variant="outlined"
-        href={msg.downloadUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        sx={{
-          color: '#fff',
-          borderColor: '#9333ea',
-          '&:hover': {
-            borderColor: '#ec4899',
-            background: 'rgba(255, 255, 255, 0.1)',
-          },
-        }}
-      >
-        Download Transformed Dataset
-      </Button>
-    ) : (
-      msg.text.split('\n').map((line, index) => (
-        <p key={index}>{line}</p>
-      ))
-    )}
+  {msg.downloadUrl ? (
+  <Button
+    variant="outlined"
+    href={msg.downloadUrl}
+    target="_blank"
+    rel="noopener noreferrer"
+    sx={{
+      color: '#fff',
+      borderColor: '#9333ea',
+      '&:hover': {
+        borderColor: '#ec4899',
+        background: 'rgba(255, 255, 255, 0.1)',
+      },
+    }}
+  >
+    Download Transformed Dataset
+  </Button>
+) : (
+  msg.text.split('\n').map((line, index) => (
+    <p key={index}>{line}</p>
+  ))
+)}
   </MessageBubble>
 </Box>
   ))}
@@ -557,19 +620,19 @@ const handlePreviewDataset = async () => {
                 sx: { borderRadius: 2 }
               }}
             />
-            {isLoading ? (
-            <GradientButton disabled variant="contained">
-              Loading...
-            </GradientButton>
-          ) : (
-            <GradientButton
-              variant="contained"
-              endIcon={<SendIcon />}
-              onClick={handleSendMessage}
-            >
-              Send
-            </GradientButton>
-          )}
+{isLoading ? (
+  <GradientButton disabled variant="contained">
+    Loading...
+  </GradientButton>
+) : (
+  <GradientButton
+    variant="contained"
+    endIcon={<SendIcon />}
+    onClick={handleSendMessage}
+  >
+    Send
+  </GradientButton>
+)}
           </Box>
         </ChatContainer>
       </Container>
