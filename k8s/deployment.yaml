@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vite-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vite-frontend
+  template:
+    metadata:
+      labels:
+        app: vite-frontend
+    spec:
+      containers:
+        - name: vite-frontend
+          image: gcr.io/bigdataarchitecture-456204/vite-app:latest
+          ports:
+            - containerPort: 80
