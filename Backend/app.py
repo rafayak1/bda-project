@@ -19,6 +19,8 @@ import matplotlib
 matplotlib.use('Agg')  # ✅ Non-GUI backend set first
 
 import matplotlib.pyplot as plt  # ✅ Must be imported AFTER backend
+from io import StringIO
+import sys
 
 
 # Initialize Flask app
@@ -64,7 +66,7 @@ def clean_ai_code(code: str):
     stripped_lines = [line.strip() for line in lines if line.strip()]
     return '\n'.join(stripped_lines)
 
-def is_likely_transformation(prompt: str) -> bool:
+def is_likely_transformation(prompt: str):
     keywords = ['remove column', 'rename column', 'filter rows', 'drop', 'convert', 'fill', 'encode', 'impute', 
                 'group by', 'pivot', 'merge', 'join', 'concat', 'stack', 'unstack', 'sort', 'sample', 
                 'drop duplicates', 'replace', 'map', 'apply', 'query', 'columns', 'size', 'shape',
@@ -74,9 +76,6 @@ def is_likely_transformation(prompt: str) -> bool:
                 'filter', 'remove', 'add', 'insert', 'update', 'change', 'modify', 'transform', 'create']
     return any(kw in prompt.lower() for kw in keywords)
 
-import requests
-import os
-import json
 
 def call_openrouter(prompt, df=None, mode="transform"):
     api_key = os.getenv("OPENROUTER_API_KEY")
@@ -523,7 +522,8 @@ def transform_dataset():
 
                 return jsonify({
                     "message": "Visualization generated 📊",
-                    "image_url": image_url
+                    "image_url": image_url,
+                    "generated_code": ai_code  # 👈 Also send the code for plot
                 }), 200
 
             except Exception as viz_err:
@@ -551,6 +551,7 @@ def transform_dataset():
             return jsonify({
                 "message": "Transformation applied successfully ✅",
                 "download_url": download_url,
+                "generated_code": ai_code,  # 👈 Add this line
                 "followup_message": "Want to continue using this cleaned dataset? Reply with yes or no."
             }), 200
 
@@ -616,6 +617,90 @@ def dataset_status():
         print(f"Error in dataset_status: {e}")
         return jsonify({"message": f"Failed to check dataset status."}), 500
 
+import ast
+
+@app.route('/run-code', methods=['POST'])
+@token_required
+def run_custom_code():
+    user_id = request.user_id
+    code = request.json.get("code", "").strip()
+
+    if not code:
+        return jsonify({"message": "No code provided"}), 400
+
+    # Fetch dataset info
+    user_ref = firestore_client.collection('users').document(user_id)
+    user_data = user_ref.get().to_dict()
+    bucket_name = user_data.get('bucket')
+    dataset_name = user_data.get('dataset')
+    file_type = user_data.get('file_type', 'csv')
+    delimiter = ',' if file_type == 'csv' else '\t'
+
+    try:
+        df = load_dataset(bucket_name, dataset_name, delimiter=delimiter)
+        local_vars = {'df': df.copy()}
+        response = {}  # ✅ Initialize early
+
+        # Capture output
+        output = StringIO()
+        sys.stdout = output
+
+        try:
+            # Parse code to find if last node is an expression
+            parsed = ast.parse(code)
+            if isinstance(parsed.body[-1], ast.Expr):
+                exec(
+                    compile(ast.Module(body=parsed.body[:-1], type_ignores=[]), filename="<ast>", mode="exec"),
+                    {},
+                    local_vars
+                )
+                result = eval(
+                    compile(ast.Expression(parsed.body[-1].value), filename="<ast>", mode="eval"),
+                    {},
+                    local_vars
+                )
+                if result is not None:
+                    print(result)
+
+                # ✅ Save plot if code contains matplotlib
+                if "plt." in code:
+                    import matplotlib
+                    matplotlib.use('Agg')
+                    import matplotlib.pyplot as plt
+                    import uuid
+
+                    plt.tight_layout()
+                    image_path = f"/tmp/plot_{uuid.uuid4().hex}.png"
+                    plt.savefig(image_path)
+                    plt.close()
+
+                    blob = storage_client.bucket(bucket_name).blob(f"plots/{user_id}/{uuid.uuid4().hex}.png")
+                    blob.upload_from_filename(image_path)
+                    image_url = blob.generate_signed_url(expiration=datetime.timedelta(hours=1))
+
+                    response["image_url"] = image_url
+            else:
+                exec(code, {}, local_vars)
+
+        finally:
+            sys.stdout = sys.__stdout__
+
+        printed_output = output.getvalue().strip()
+        response["message"] = printed_output or "Code executed successfully."
+
+        result_df = local_vars.get('df')
+        response["generated_code"] = code
+        if isinstance(result_df, pd.DataFrame) and printed_output == "":
+            response["table"] = {
+                "columns": result_df.columns.tolist(),
+                "rows": result_df.fillna("").to_dict(orient='records')
+            }
+
+        return jsonify(response)
+
+    except Exception as e:
+        sys.stdout = sys.__stdout__  # Failsafe restore
+        return jsonify({"message": f"Execution error: {str(e)}"}), 500
 @app.route('/chat', methods=['GET'])
 @token_required
 def chat_welcome():

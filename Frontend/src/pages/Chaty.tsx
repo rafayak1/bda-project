@@ -20,6 +20,7 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
+import CodeExecutor from '../components/CodeExecutor';
 
 // Comment out these Firebase imports
 // import { auth } from '../firebase';
@@ -155,6 +156,7 @@ const Chatx: React.FC = () => {
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [previewColumns, setPreviewColumns] = useState<any[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [code, setCode] = useState("df.head()");
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -226,7 +228,11 @@ const handleSendMessage = async () => {
         withCredentials: true,
       }
     );
-    const { message: botText, download_url, followup_message, image_url, table } = response.data;
+    const { message: botText, download_url, followup_message, image_url, table, generated_code } = response.data;
+
+if (generated_code) {
+  setCode(generated_code);
+}
 
     const botResponse: Message = {
       id: (Date.now() + 1).toString(),
@@ -590,6 +596,11 @@ const handlePreviewDataset = async () => {
 )}
           </Box>
         </ChatContainer>
+
+
+<Box sx={{ mt: 4 }}>
+<CodeExecutor code={code} setCode={setCode} />
+</Box>
       </Container>
     </div>
     <Dialog
