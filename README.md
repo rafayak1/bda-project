@@ -82,6 +82,30 @@ Access at: `http://localhost:5173`
 
 ⸻
 
+## Commands for deploying GKE cluster
+
+add your key.json file to your root folder 
+
+terraform init
+
+terraform plan
+
+terraform apply
+
+terraform destroy( To destroy infrastructure)
+
+## Commands for Deployment
+
+docker buildx build --platform linux/amd64 -t gcr.io/bigdataarchitecture-456204/vite-app:latest .
+
+ docker push gcr.io/bigdataarchitecture-456204/vite-app:latest
+
+kubectl apply -f k8s/deployment.yaml
+
+kubectl apply -f k8s/service.yaml
+
+
+
 ## 🧠 Credits
 
 **Built by:**
