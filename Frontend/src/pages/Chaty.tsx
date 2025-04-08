@@ -228,29 +228,66 @@ const handleSendMessage = async () => {
         withCredentials: true,
       }
     );
-    const { message: botText, download_url, followup_message, image_url, table, generated_code } = response.data;
 
-if (generated_code) {
-  setCode(generated_code);
-}
+    const {
+      message: botText,
+      download_url,
+      followup_message,
+      image_url,
+      table,
+      generated_code
+    } = response.data;
 
-    const botResponse: Message = {
-      id: (Date.now() + 1).toString(),
-      text: botText || (image_url ? 'Here’s your visualization 📈' : ''),
-      isUser: false,
-      timestamp: new Date(),
-      isFile: !!download_url,
-      fileName: download_url ? 'Download Transformed Dataset' : undefined,
-      downloadUrl: download_url,
-      imageUrl: image_url, 
-      tableData: table,
-    };
+    if (generated_code) {
+      setCode(generated_code);
+    }
 
-    const messagesToAdd: Message[] = [botResponse];
+    const messagesToAdd: Message[] = [];
+
+    if (botText) {
+      messagesToAdd.push({
+        id: uuid(),
+        text: botText,
+        isUser: false,
+        timestamp: new Date(),
+      });
+    }
+
+    if (image_url) {
+      messagesToAdd.push({
+        id: uuid(),
+        text: '',
+        isUser: false,
+        timestamp: new Date(),
+        imageUrl: image_url,
+      });
+    }
+
+    if (download_url) {
+      messagesToAdd.push({
+        id: uuid(),
+        text: '',
+        isUser: false,
+        timestamp: new Date(),
+        isFile: true,
+        fileName: 'Download Transformed Dataset',
+        downloadUrl: download_url,
+      });
+    }
+
+    if (table) {
+      messagesToAdd.push({
+        id: uuid(),
+        text: '',
+        isUser: false,
+        timestamp: new Date(),
+        tableData: table,
+      });
+    }
 
     if (followup_message) {
       messagesToAdd.push({
-        id: (Date.now() + 2).toString(),
+        id: uuid(),
         text: followup_message,
         isUser: false,
         timestamp: new Date(),

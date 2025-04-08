@@ -520,10 +520,19 @@ def transform_dataset():
                 blob.upload_from_filename(image_path)
                 image_url = blob.generate_signed_url(expiration=datetime.timedelta(hours=1))
 
+                # 🧠 Ask AI to describe the chart
+                plot_description_prompt = (
+                    f"This code creates a visualization using matplotlib:\n\n{ai_code}\n\n"
+                    "Please describe what this plot shows in 1-2 friendly and concise sentences, "
+                    "assuming the DataFrame variable is `df`. Don’t include the code, just a natural description."
+                )
+                chart_caption = call_openrouter(plot_description_prompt, df, mode="chat")
+                print("AI GENERATED CAPTION:\n", chart_caption)
+
                 return jsonify({
-                    "message": "Visualization generated 📊",
+                    "message": chart_caption.strip() or "Here's your visualization 📊",
                     "image_url": image_url,
-                    "generated_code": ai_code  # 👈 Also send the code for plot
+                    "generated_code": ai_code
                 }), 200
 
             except Exception as viz_err:
