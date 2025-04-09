@@ -24,9 +24,11 @@ import CodeExecutor from '../components/CodeExecutor';
 import ReactMarkdown from 'react-markdown';
 import { Select, MenuItem, InputLabel, FormControl } from '@mui/material'; // ✅ Add to imports if not already there
 
-// Comment out these Firebase imports
-// import { auth } from '../firebase';
-// import { useAuthState } from 'react-firebase-hooks/auth';
+interface Window {
+  webkitSpeechRecognition: any;
+  SpeechRecognition: any;
+
+}
 
 // Styled components with updated color scheme
 const ChatContainer = styled(Paper)(({ theme }) => ({
@@ -182,6 +184,7 @@ const Chatx: React.FC = () => {
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
   const [submittingTrainer, setSubmittingTrainer] = useState(false);
+  const [listening, setListening] = useState(false);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -200,6 +203,38 @@ useEffect(() => {
   const token = localStorage.getItem('token');
   setIsLoggedIn(!!token);
 }, []);
+// Enable support for webkitSpeechRecognition
+
+
+const handleMicClick = () => {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    alert('Speech recognition is not supported in this browser.');
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.lang = 'en-US';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  setListening(true);
+  recognition.start();
+
+  recognition.onresult = (event: any) => {
+    const transcript = event.results[0][0].transcript;
+    setMessage(transcript);
+    handleSendMessage(); 
+  };
+
+  recognition.onend = () => setListening(false);
+
+  recognition.onerror = (event: any) => {
+    console.error('Speech recognition error:', event.error);
+    setListening(false);
+  };
+};
 
 const checkDatasetStatus = async () => {
   try {
@@ -516,6 +551,7 @@ const handlePreviewDataset = async () => {
   };
 
   return (
+    
     // 1) Top-level Box to ensure the entire background is black:
     <Box 
       sx={{ 
@@ -525,6 +561,7 @@ const handlePreviewDataset = async () => {
         width: '100%',
       }}
     >
+      <GlobalStyles />
       {/* Navigation */}
       <motion.nav 
         initial={{ y: -100 }}
@@ -582,6 +619,19 @@ const handlePreviewDataset = async () => {
     borderRight: '1px solid #1f2937',
   }}
 >
+<Typography
+    variant="h6"
+    sx={{
+      color: 'white',
+      fontWeight: 'bold',
+      mt: 2,
+      mb: 2,
+      fontSize: '0.85rem',
+      textAlign: 'center',
+    }}
+  >
+    BuffFeatures
+  </Typography>
 <Tooltip title="Buff Clean 🧼" placement="right">
   <Button
     sx={{
@@ -820,36 +870,50 @@ const handlePreviewDataset = async () => {
                 <div ref={messagesEndRef} />
               </MessagesContainer>
   
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <StyledTextField
-                  fullWidth
-                  variant="outlined"
-                  placeholder="Type your message here..."
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      handleSendMessage();
-                    }
-                  }}
-                  InputProps={{
-                    sx: { borderRadius: 2 }
-                  }}
-                />
-                {isLoading ? (
-                  <GradientButton disabled variant="contained">
-                    Loading...
-                  </GradientButton>
-                ) : (
-                  <GradientButton
-                    variant="contained"
-                    endIcon={<SendIcon />}
-                    onClick={handleSendMessage}
-                  >
-                    Send
-                  </GradientButton>
-                )}
-              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+  <StyledTextField
+    fullWidth
+    variant="outlined"
+    placeholder="Type your message here..."
+    value={message}
+    onChange={(e) => setMessage(e.target.value)}
+    onKeyPress={(e) => {
+      if (e.key === 'Enter') handleSendMessage();
+    }}
+    InputProps={{ sx: { borderRadius: 2 } }}
+  />
+
+<Tooltip title="Speak">
+  <IconButton
+    onClick={handleMicClick}
+    sx={{
+      color: listening ? '#ec4899' : '#fff',
+      border: '1px solid rgba(255,255,255,0.2)',
+      background: listening ? 'rgba(236, 72, 153, 0.15)' : 'transparent',
+      animation: listening ? 'pulse 1s infinite' : 'none',
+      '&:hover': {
+        backgroundColor: 'rgba(236, 72, 153, 0.3)',
+      },
+    }}
+  >
+    <span role="img" aria-label="mic" style={{ fontSize: 20 }}>🎤</span>
+  </IconButton>
+</Tooltip>
+
+  {isLoading ? (
+    <GradientButton disabled variant="contained">
+      Loading...
+    </GradientButton>
+  ) : (
+    <GradientButton
+      variant="contained"
+      endIcon={<SendIcon />}
+      onClick={handleSendMessage}
+    >
+      Send
+    </GradientButton>
+  )}
+</Box>
             </ChatContainer>
   
             <Box sx={{ mt: 4 }}>
@@ -1223,3 +1287,20 @@ const handlePreviewDataset = async () => {
   };
     
   export default Chatx;
+  const GlobalStyles = () => (
+    <style>
+      {`
+        @keyframes pulse {
+          0% {
+            box-shadow: 0 0 0 0 rgba(236, 72, 153, 0.4);
+          }
+          70% {
+            box-shadow: 0 0 0 10px rgba(236, 72, 153, 0);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(236, 72, 153, 0);
+          }
+        }
+      `}
+    </style>
+  );
