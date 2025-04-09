@@ -140,6 +140,7 @@ interface Message {
   downloadUrl?: string;
   tableData?: { columns: string[]; rows: (string | number)[][] } | null;
   imageUrl?: string;
+  fileLabel?: string;
 }
 
 const Chatx: React.FC = () => {
@@ -172,6 +173,15 @@ const Chatx: React.FC = () => {
   const [xAxis, setXAxis] = useState("");
   const [yAxis, setYAxis] = useState("");
   const [submittingBuffVisualizer, setSubmittingBuffVisualizer] = useState(false);
+  // BuffTrainer-related state
+  const [trainerDialogOpen, setTrainerDialogOpen] = useState(false);
+  const [trainerColumns, setTrainerColumns] = useState<string[]>([]);
+  const [numericColumns, setNumericColumns] = useState<string[]>([]);
+  const [trainerFeatures, setTrainerFeatures] = useState<string[]>([]);
+  const [trainerTarget, setTrainerTarget] = useState('');
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [selectedModel, setSelectedModel] = useState('');
+  const [submittingTrainer, setSubmittingTrainer] = useState(false);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -556,32 +566,32 @@ const handlePreviewDataset = async () => {
       <Box sx={{ display: 'flex', pt: 0 }}>
         {/* Left Vertical Button Bar */}
         <Box
-          sx={{
-            width: 80,
-            height: '100vh',
-            backgroundColor: '#111827',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            paddingTop: 10,
-            gap: 2,
-            position: 'fixed',
-            top: 64, // below the navbar height
-            left: 0,
-            zIndex: 10,
-            borderRight: '1px solid #1f2937',
-          }}
-        >
+  sx={{
+    width: 100,
+    height: '100vh',
+    backgroundColor: '#111827',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center', // centers vertically
+    gap: 4, // more spacing between buttons
+    position: 'fixed',
+    top: 64,
+    left: 0,
+    zIndex: 10,
+    borderRight: '1px solid #1f2937',
+  }}
+>
 <Tooltip title="Buff Clean 🧼" placement="right">
   <Button
     sx={{
       minWidth: 0,
-      width: 56,
-      height: 56,
+      width: 72,
+      height: 72,
+      fontSize: 32,
       borderRadius: '50%',
       background: 'linear-gradient(to right, #4f46e5, #9333ea)',
       color: 'white',
-      fontSize: 24,
       '&:hover': {
         background: 'linear-gradient(to right, #4338ca, #7e22ce)',
       },
@@ -606,12 +616,12 @@ const handlePreviewDataset = async () => {
   <Button
     sx={{
       minWidth: 0,
-      width: 56,
-      height: 56,
+      width: 72,
+      height: 72,
+      fontSize: 32,
       borderRadius: '50%',
       background: 'linear-gradient(to right, #4f46e5, #9333ea)',
       color: 'white',
-      fontSize: 24,
       '&:hover': {
         background: 'linear-gradient(to right, #4338ca, #7e22ce)',
       },
@@ -640,25 +650,37 @@ const handlePreviewDataset = async () => {
   </Button>
 </Tooltip>
   
-          <Tooltip title="Buff Trainer 🤖" placement="right">
-            <Button
-              sx={{
-                minWidth: 0,
-                width: 56,
-                height: 56,
-                borderRadius: '50%',
-                background: 'linear-gradient(to right, #4f46e5, #9333ea)',
-                color: 'white',
-                fontSize: 24,
-                '&:hover': {
-                  background: 'linear-gradient(to right, #4338ca, #7e22ce)',
-                },
-              }}
-              onClick={handleBuffTrainerClick}
-            >
-              🤖
-            </Button>
-          </Tooltip>
+<Tooltip title="Buff Trainer 🤖" placement="right">
+  <Button
+    sx={{
+      minWidth: 0,
+      width: 72,
+      height: 72,
+      fontSize: 32,
+      borderRadius: '50%',
+      background: 'linear-gradient(to right, #4f46e5, #9333ea)',
+      color: 'white',
+      '&:hover': {
+        background: 'linear-gradient(to right, #4338ca, #7e22ce)',
+      },
+    }}
+    onClick={async () => {
+      try {
+        const res = await axiosInstance.get('/buff-trainer-options', {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        });
+        setTrainerColumns(res.data.columns);
+        setNumericColumns(res.data.numeric_columns);
+        setAvailableModels(res.data.models);
+        setTrainerDialogOpen(true);
+      } catch (err) {
+        console.error('Failed to fetch trainer options:', err);
+      }
+    }}
+  >
+    🤖
+  </Button>
+</Tooltip>
         </Box>
   
         {/* 3) Main Content – shifted to the right so the sidebar doesn't overlap */}
@@ -740,22 +762,22 @@ const handlePreviewDataset = async () => {
                   >
                     <MessageBubble isUser={msg.isUser}>
                       {msg.downloadUrl ? (
-                        <Button
-                          variant="outlined"
-                          href={msg.downloadUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          sx={{
-                            color: '#fff',
-                            borderColor: '#9333ea',
-                            '&:hover': {
-                              borderColor: '#ec4899',
-                              background: 'rgba(255, 255, 255, 0.1)',
-                            },
-                          }}
-                        >
-                          Download Transformed Dataset
-                        </Button>
+                     <Button
+                     variant="outlined"
+                     href={msg.downloadUrl}
+                     target="_blank"
+                     rel="noopener noreferrer"
+                     sx={{
+                       color: '#fff',
+                       borderColor: '#9333ea',
+                       '&:hover': {
+                         borderColor: '#ec4899',
+                         background: 'rgba(255, 255, 255, 0.1)',
+                       },
+                     }}
+                   >
+                     {msg.fileLabel || "Download Transformed Dataset"}
+                   </Button>
                       ) : msg.imageUrl ? (
                         <img 
                           src={msg.imageUrl} 
@@ -1088,6 +1110,111 @@ const handlePreviewDataset = async () => {
 >
   Generate Chart
 </Button>
+    </Box>
+  </DialogContent>
+</Dialog>
+<Dialog open={trainerDialogOpen} onClose={() => setTrainerDialogOpen(false)} maxWidth="sm" fullWidth>
+  <DialogTitle>Buff Trainer 🤖</DialogTitle>
+  <DialogContent>
+    <Box mt={2}>
+      <Typography>Select Features:</Typography>
+      <FormControl fullWidth sx={{ mt: 1 }}>
+        <InputLabel>Features</InputLabel>
+        <Select
+          multiple
+          value={trainerFeatures}
+          onChange={(e) => setTrainerFeatures(e.target.value as string[])}
+          renderValue={(selected) => selected.join(', ')}
+        >
+          {numericColumns.map((col) => (
+            <MenuItem key={col} value={col}>
+              {col}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+    </Box>
+
+    <Box mt={3}>
+      <Typography>Select Target:</Typography>
+      <FormControl fullWidth>
+        <InputLabel>Target Column</InputLabel>
+        <Select
+          value={trainerTarget}
+          onChange={(e) => setTrainerTarget(e.target.value)}
+        >
+          {numericColumns.map((col) => (
+            <MenuItem key={col} value={col}>
+              {col}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+    </Box>
+
+    <Box mt={3}>
+      <Typography>Select Model:</Typography>
+      <FormControl fullWidth>
+        <InputLabel>Model</InputLabel>
+        <Select
+          value={selectedModel}
+          onChange={(e) => setSelectedModel(e.target.value)}
+        >
+          {availableModels.map((model) => (
+            <MenuItem key={model} value={model}>
+              {model}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+    </Box>
+
+    <Box mt={4}>
+      <Button
+        fullWidth
+        variant="contained"
+        disabled={submittingTrainer}
+        onClick={async () => {
+          setSubmittingTrainer(true);
+          try {
+            const res = await axiosInstance.post('/buff-trainer', {
+              features: trainerFeatures,
+              target: trainerTarget,
+              model_type: selectedModel,
+            }, {
+              headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+            });
+
+            const { summary, download_url } = res.data;
+
+            const trainerMessages = [
+              { id: uuid(), text: summary, isUser: false, timestamp: new Date() },
+              {
+                id: uuid(),
+                text: '',
+                isUser: false,
+                timestamp: new Date(),
+                isFile: true,
+                fileName: 'Download Trained Model',
+                downloadUrl: download_url,
+                fileLabel: 'Download Model',
+              }
+            ];
+
+            setMessages((prev) => [...prev, ...trainerMessages]);
+          } catch (err) {
+            console.error('Buff Trainer failed:', err);
+          } finally {
+            setSubmittingTrainer(false);
+            setTrainerDialogOpen(false);
+            setTrainerFeatures([]);
+            setTrainerTarget('');
+            setSelectedModel('');
+          }
+        }}
+      >
+        Train Model
+      </Button>
     </Box>
   </DialogContent>
 </Dialog>

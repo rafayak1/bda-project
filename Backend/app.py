@@ -173,7 +173,6 @@ def call_openrouter(prompt, df=None, mode="transform"):
         ]
     }
 
-    print("SENDING REQUEST:\n", json.dumps(body, indent=2))
     response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=body)
     response.raise_for_status()
 
@@ -695,6 +694,97 @@ def buff_visualizer():
 
     except Exception as e:
         return jsonify({"message": f"Buff Visualizer failed: {str(e)}"}), 500
+
+@app.route('/buff-trainer-options', methods=['GET'])
+@token_required
+def buff_trainer_options():
+    try:
+        user_ref = firestore_client.collection('users').document(request.user_id)
+        user_data = user_ref.get().to_dict()
+        dataset_name = user_data.get('updated_dataset') or user_data.get('dataset')
+        file_type = user_data.get('file_type', 'csv')
+        delimiter = ',' if file_type == 'csv' else '\t'
+
+        df = load_dataset(user_data['bucket'], dataset_name, delimiter=delimiter)
+        numeric_columns = df.select_dtypes(include='number').columns.tolist()
+
+        return jsonify({
+            "columns": df.columns.tolist(),
+            "numeric_columns": numeric_columns,
+            "models": ["Linear Regression", "Random Forest", "Decision Tree"]
+        }), 200
+
+    except Exception as e:
+        print(f"Error in /buff-trainer-options: {e}")
+        return jsonify({"message": "Failed to fetch training options"}), 500
+
+@app.route('/buff-trainer', methods=['POST'])
+@token_required
+def buff_trainer():
+    try:
+        data = request.get_json()
+        features = data.get('features')
+        target = data.get('target')
+        model_type = data.get('model_type')
+
+        if not features or not target or not model_type:
+            return jsonify({"message": "Missing features, target, or model type"}), 400
+
+        user_ref = firestore_client.collection('users').document(request.user_id)
+        user_data = user_ref.get().to_dict()
+        dataset_name = user_data.get('updated_dataset') or user_data.get('dataset')
+        file_type = user_data.get('file_type', 'csv')
+        delimiter = ',' if file_type == 'csv' else '\t'
+
+        df = load_dataset(user_data['bucket'], dataset_name, delimiter=delimiter)
+        df = df.dropna(subset=features + [target])
+
+        from sklearn.model_selection import train_test_split
+        from sklearn.linear_model import LinearRegression
+        from sklearn.ensemble import RandomForestRegressor
+        from sklearn.tree import DecisionTreeRegressor
+        from sklearn.metrics import mean_squared_error, r2_score
+        import pickle
+
+        X = df[features]
+        y = df[target]
+
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        if model_type == "Linear Regression":
+            model = LinearRegression()
+        elif model_type == "Random Forest":
+            model = RandomForestRegressor()
+        elif model_type == "Decision Tree":
+            model = DecisionTreeRegressor()
+        else:
+            return jsonify({"message": "Unsupported model type"}), 400
+
+        model.fit(X_train, y_train)
+        predictions = model.predict(X_test)
+
+        mse = mean_squared_error(y_test, predictions)
+        r2 = r2_score(y_test, predictions)
+
+        # Save model to GCS
+        model_file = f"{request.user_id}_trained_model.pkl"
+        with open(model_file, 'wb') as f:
+            pickle.dump(model, f)
+
+        bucket = storage_client.get_bucket(user_data['bucket'])
+        blob = bucket.blob(model_file)
+        blob.upload_from_filename(model_file)
+        os.remove(model_file)
+        model_url = blob.generate_signed_url(expiration=datetime.timedelta(hours=1))
+
+        return jsonify({
+            "summary": f"📊 Model: {model_type}\n\nR² Score: {r2:.4f}\n\nMSE: {mse:.4f}",
+            "download_url": model_url
+        }), 200
+
+    except Exception as e:
+        print(f"Error in /buff-trainer: {e}")
+        return jsonify({"message": "Training failed: " + str(e)}), 500
 
 @app.route('/transform', methods=['POST'])
 @token_required
