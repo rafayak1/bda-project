@@ -509,8 +509,10 @@ def buff_clean():
         dataset_name = user_data.get('updated_dataset') or user_data.get('dataset')
         file_type = user_data.get('file_type', 'csv')
         delimiter = ',' if file_type == 'csv' else '\t'
+
         df = load_dataset(user_data['bucket'], dataset_name, delimiter=delimiter)
 
+        # Create a working copy
         if selected_columns:
             df_subset = df[selected_columns].copy()
         else:
@@ -520,34 +522,66 @@ def buff_clean():
 
         for strategy in strategies:
             if strategy == "drop_na_rows":
-                before = len(df_subset)
-                df_subset.dropna(inplace=True)
-                transformation_summary.append(f"Dropped {before - len(df_subset)} rows with NaN values.")
+                before_rows = df_subset.shape[0]
+                df_subset = df_subset.dropna()
+                after_rows = df_subset.shape[0]
+                dropped = before_rows - after_rows
+                transformation_summary.append(f"Dropped {dropped} rows with missing values.")
+
+                # Sync full DataFrame by dropping same rows
+                if not selected_columns:
+                    df = df.loc[df_subset.index]
+                else:
+                    df = df.loc[df_subset.index]  # keep only common rows
+
             elif strategy == "fill_missing_with_mean":
                 num_cols = df_subset.select_dtypes(include='number').columns
-                df_subset[num_cols] = df_subset[num_cols].fillna(df_subset[num_cols].mean())
-                transformation_summary.append("Filled missing numeric values with mean.")
+                if len(num_cols) > 0:
+                    df_subset[num_cols] = df_subset[num_cols].fillna(df_subset[num_cols].mean())
+                    transformation_summary.append("Filled missing numeric values with column means.")
+                else:
+                    transformation_summary.append("No numeric columns found for mean imputation.")
+
             elif strategy == "fill_missing_with_median":
                 num_cols = df_subset.select_dtypes(include='number').columns
-                df_subset[num_cols] = df_subset[num_cols].fillna(df_subset[num_cols].median())
-                transformation_summary.append("Filled missing numeric values with median.")
+                if len(num_cols) > 0:
+                    df_subset[num_cols] = df_subset[num_cols].fillna(df_subset[num_cols].median())
+                    transformation_summary.append("Filled missing numeric values with column medians.")
+                else:
+                    transformation_summary.append("No numeric columns found for median imputation.")
+
             elif strategy == "fill_missing_with_mode":
                 for col in df_subset.columns:
-                    df_subset[col] = df_subset[col].fillna(df_subset[col].mode()[0])
-                transformation_summary.append("Filled missing values with mode.")
+                    try:
+                        mode = df_subset[col].mode()
+                        if not mode.empty:
+                            df_subset[col] = df_subset[col].fillna(mode[0])
+                    except Exception as e:
+                        print(f"Mode fill skipped for {col}: {e}")
+                transformation_summary.append("Filled missing values using mode for each column.")
+
             elif strategy == "label_encode":
                 from sklearn.preprocessing import LabelEncoder
                 for col in df_subset.select_dtypes(include='object').columns:
-                    df_subset[col] = LabelEncoder().fit_transform(df_subset[col])
-                transformation_summary.append("Label encoded categorical columns.")
+                    try:
+                        df_subset[col] = LabelEncoder().fit_transform(df_subset[col].astype(str))
+                    except Exception as e:
+                        print(f"Label encoding skipped for {col}: {e}")
+                transformation_summary.append("Applied label encoding to categorical columns.")
+
             elif strategy == "one_hot_encode":
-                df_subset = pd.get_dummies(df_subset)
-                transformation_summary.append("Applied one-hot encoding on categorical columns.")
+                try:
+                    df_subset = pd.get_dummies(df_subset)
+                    transformation_summary.append("Applied one-hot encoding on categorical columns.")
+                except Exception as e:
+                    transformation_summary.append(f"One-hot encoding failed: {e}")
 
         # Replace original columns with cleaned ones
         if selected_columns:
             for col in df_subset.columns:
                 df[col] = df_subset[col]
+        else:
+            df = df_subset
 
         cleaned_name = f"buff_cleaned_{dataset_name}"
         save_dataset(user_data['bucket'], cleaned_name, df)
@@ -557,10 +591,10 @@ def buff_clean():
         download_url = blob.generate_signed_url(expiration=datetime.timedelta(hours=1))
 
         return jsonify({
-    "transformation_summary": "🧼 Buff Clean complete! Here's what I did:\n\n" + "\n".join([f"● {t}" for t in transformation_summary]),
-    "download_url": download_url,
-    "followup_message": "Would you like to continue using this cleaned dataset? Reply with `yes` or `no`."
-}), 200
+            "transformation_summary": "🧼 Buff Clean complete! Here's what I did:\n\n" + "\n".join([f"● {t}" for t in transformation_summary]),
+            "download_url": download_url,
+            "followup_message": "Would you like to continue using this cleaned dataset? Reply with `yes` or `no`."
+        }), 200
 
     except Exception as e:
         print(f"Error in /buff-clean: {e}")
