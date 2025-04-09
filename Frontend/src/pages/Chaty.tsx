@@ -22,7 +22,9 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import CodeExecutor from '../components/CodeExecutor';
 import ReactMarkdown from 'react-markdown';
-import { Select, MenuItem, InputLabel, FormControl } from '@mui/material'; // ✅ Add to imports if not already there
+import { Select, MenuItem, InputLabel, FormControl } from '@mui/material'; 
+import Lottie from "lottie-react";
+import typingAnimation from "../assets/ai-typing.json";
 
 interface Window {
   webkitSpeechRecognition: any;
@@ -185,6 +187,9 @@ const Chatx: React.FC = () => {
   const [selectedModel, setSelectedModel] = useState('');
   const [submittingTrainer, setSubmittingTrainer] = useState(false);
   const [listening, setListening] = useState(false);
+  const [buffInsightDialogOpen, setBuffInsightDialogOpen] = useState(false);
+  const [buffInsightLoading, setBuffInsightLoading] = useState(false);
+  const [buffInsightMarkdown, setBuffInsightMarkdown] = useState('');
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -731,6 +736,72 @@ const handlePreviewDataset = async () => {
     🤖
   </Button>
 </Tooltip>
+<Tooltip title="Buff Insight 🔍" placement="right">
+  <Button
+    sx={{
+      minWidth: 0,
+      width: 72,
+      height: 72,
+      fontSize: 32,
+      borderRadius: '50%',
+      background: 'linear-gradient(to right, #4f46e5, #9333ea)',
+      color: 'white',
+      '&:hover': {
+        background: 'linear-gradient(to right, #4338ca, #7e22ce)',
+      },
+    }}
+    onClick={async () => {
+      const loadingMsgId = uuid();
+    
+      // Add temporary animation message to chat
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: loadingMsgId,
+          text: "",
+          isUser: false,
+          timestamp: new Date(),
+          isLoading: true,
+        },
+      ]);
+    
+      try {
+        const res = await axiosInstance.get("/buff-insight", {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
+    
+        const summary = res.data.summary_markdown || "No insights returned.";
+        const summaryMessage = {
+          id: uuid(),
+          text: summary,
+          isUser: false,
+          timestamp: new Date(),
+        };
+    
+        // Replace loading animation with real summary
+        setMessages((prev) =>
+          prev
+            .filter((msg) => msg.id !== loadingMsgId)
+            .concat(summaryMessage)
+        );
+      } catch (err) {
+        console.error("Buff Insight failed:", err);
+        setMessages((prev) =>
+          prev
+            .filter((msg) => msg.id !== loadingMsgId)
+            .concat({
+              id: uuid(),
+              text: "❌ Failed to fetch dataset insights.",
+              isUser: false,
+              timestamp: new Date(),
+            })
+        );
+      }
+    }}
+  >
+    🔍
+  </Button>
+</Tooltip>
         </Box>
   
         {/* 3) Main Content – shifted to the right so the sidebar doesn't overlap */}
@@ -805,70 +876,76 @@ const handlePreviewDataset = async () => {
               </Box>
   
               <MessagesContainer sx={{ display: 'flex', flexDirection: 'column' }}>
-                {messages.map((msg) => (
-                  <Box
-                    key={msg.id}
-                    sx={{ display: 'flex', justifyContent: msg.isUser ? 'flex-end' : 'flex-start' }}
-                  >
-                    <MessageBubble isUser={msg.isUser}>
-                      {msg.downloadUrl ? (
-                     <Button
-                     variant="outlined"
-                     href={msg.downloadUrl}
-                     target="_blank"
-                     rel="noopener noreferrer"
-                     sx={{
-                       color: '#fff',
-                       borderColor: '#9333ea',
-                       '&:hover': {
-                         borderColor: '#ec4899',
-                         background: 'rgba(255, 255, 255, 0.1)',
-                       },
-                     }}
-                   >
-                     {msg.fileLabel || "Download Transformed Dataset"}
-                   </Button>
-                      ) : msg.imageUrl ? (
-                        <img 
-                          src={msg.imageUrl} 
-                          alt="Generated Visualization" 
-                          style={{ maxWidth: '100%' }} 
-                        />
-                      ) : msg.tableData ? (
-                        <Box sx={{ mt: 1 }}>
-                          <TableContainer component={Paper} sx={{ backgroundColor: '#121212' }}>
-                            <Table size="small">
-                              <TableHead>
-                                <TableRow>
-                                  {msg.tableData.columns.map((col, idx) => (
-                                    <TableCell key={idx} sx={{ color: 'white', fontWeight: 'bold' }}>
-                                      {col}
-                                    </TableCell>
-                                  ))}
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {msg.tableData.rows.map((row, rowIdx) => (
-                                  <TableRow key={rowIdx}>
-                                    {Object.values(row).map((cell, colIdx) => (
-                                      <TableCell key={colIdx} sx={{ color: 'white' }}>
-                                        {cell}
-                                      </TableCell>
-                                    ))}
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </TableContainer>
-                        </Box>
-                      ) : (
-                        <ReactMarkdown>{msg.text}</ReactMarkdown>
-                      )}
-                    </MessageBubble>
-                  </Box>
-                ))}
-                <div ref={messagesEndRef} />
-              </MessagesContainer>
+  {messages.map((msg) => (
+    <Box
+      key={msg.id}
+      sx={{ display: 'flex', justifyContent: msg.isUser ? 'flex-end' : 'flex-start' }}
+    >
+      <MessageBubble isUser={msg.isUser}>
+        {msg.isLoading ? (
+          <Lottie
+            animationData={typingAnimation}
+            loop
+            style={{ width: 100, height: 100 }}
+          />
+        ) : msg.downloadUrl ? (
+          <Button
+            variant="outlined"
+            href={msg.downloadUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            sx={{
+              color: '#fff',
+              borderColor: '#9333ea',
+              '&:hover': {
+                borderColor: '#ec4899',
+                background: 'rgba(255, 255, 255, 0.1)',
+              },
+            }}
+          >
+            {msg.fileLabel || "Download Transformed Dataset"}
+          </Button>
+        ) : msg.imageUrl ? (
+          <img
+            src={msg.imageUrl}
+            alt="Generated Visualization"
+            style={{ maxWidth: '100%' }}
+          />
+        ) : msg.tableData ? (
+          <Box sx={{ mt: 1 }}>
+            <TableContainer component={Paper} sx={{ backgroundColor: '#121212' }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    {msg.tableData.columns.map((col, idx) => (
+                      <TableCell key={idx} sx={{ color: 'white', fontWeight: 'bold' }}>
+                        {col}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {msg.tableData.rows.map((row, rowIdx) => (
+                    <TableRow key={rowIdx}>
+                      {Object.values(row).map((cell, colIdx) => (
+                        <TableCell key={colIdx} sx={{ color: 'white' }}>
+                          {cell}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        ) : (
+          <ReactMarkdown>{msg.text}</ReactMarkdown>
+        )}
+      </MessageBubble>
+    </Box>
+  ))}
+  <div ref={messagesEndRef} />
+</MessagesContainer>
   
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
   <StyledTextField
@@ -1280,6 +1357,20 @@ const handlePreviewDataset = async () => {
         Train Model
       </Button>
     </Box>
+  </DialogContent>
+</Dialog>
+<Dialog open={buffInsightDialogOpen} onClose={() => setBuffInsightDialogOpen(false)} maxWidth="md" fullWidth>
+  <DialogTitle>📊 Buff Insight Summary</DialogTitle>
+  <DialogContent dividers>
+    {buffInsightLoading ? (
+      <Box display="flex" justifyContent="center" p={4}>
+        <CircularProgress />
+      </Box>
+    ) : (
+      <Box sx={{ typography: 'body1', color: '#1e293b' }}>
+        <ReactMarkdown>{buffInsightMarkdown}</ReactMarkdown>
+      </Box>
+    )}
   </DialogContent>
 </Dialog>
     </Box>

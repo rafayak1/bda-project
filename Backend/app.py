@@ -151,6 +151,7 @@ def call_openrouter(prompt, df=None, mode="transform"):
         user_prompt = f"Given this command: '{prompt}', write Python pandas code to perform this on a dataframe named df."
 
     else:  # mode == "chat"
+        logger.info("in chat mode)")
         columns = df.columns.tolist() if df is not None else []
         print("Columns:", columns)
         preview = df.head(5).to_dict(orient='records') if df is not None else []
@@ -175,6 +176,8 @@ def call_openrouter(prompt, df=None, mode="transform"):
 
     response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=body)
     response.raise_for_status()
+    
+    logger.info(f"OpenRouter response: {response.json()}")
 
     result = response.json()
     return result['choices'][0]['message']['content']
@@ -785,6 +788,60 @@ def buff_trainer():
     except Exception as e:
         print(f"Error in /buff-trainer: {e}")
         return jsonify({"message": "Training failed: " + str(e)}), 500
+
+@app.route('/buff-insight', methods=['GET'])
+@token_required
+def buff_insight():
+    try:
+        user_ref = firestore_client.collection('users').document(request.user_id)
+        user_data = user_ref.get().to_dict()
+        dataset_name = user_data.get('updated_dataset') or user_data.get('dataset')
+        file_type = user_data.get('file_type', 'csv')
+        delimiter = ',' if file_type == 'csv' else '\t'
+
+        df = load_dataset(user_data['bucket'], dataset_name, delimiter=delimiter)
+
+        # Generate data summary components
+        describe = df.describe(include='all').to_dict()
+        correlation = df.corr(numeric_only=True).to_dict()
+        columns = df.columns.tolist()
+        preview = df.head(5).to_dict(orient='records')
+
+        # Prepare context strings
+        describe_str = json.dumps(describe, indent=2)
+        correlation_str = json.dumps(correlation, indent=2)
+        columns_str = ", ".join(columns)
+        preview_str = json.dumps(preview, indent=2)
+
+        # Updated prompt with full context
+        ai_prompt = (
+            f"Here is a summary of the dataset:\n\n"
+            f"Columns: {columns_str}\n\n"
+            f"First few rows:\n{preview_str}\n\n"
+            f"Describe statistics:\n{describe_str}\n\n"
+            f"Correlation matrix:\n{correlation_str}\n\n"
+            "Now, generate a concise natural language summary of this dataset. "
+            "Mention number of rows and columns, identify skewed or unusual distributions, "
+            "strong correlations (r > 0.75), and any interesting trends. "
+            "Make it helpful, friendly, and easy to understand."
+            "Make sure the title of your summary is 'BuffInsight' and it is in markdown format."
+            )
+
+        explanation = call_openrouter(
+            prompt=ai_prompt,
+            df=df,
+            mode="chat"  
+        )
+        
+        logger.info(f"Generated Insight: {explanation}")
+
+        return jsonify({
+            "summary_markdown": explanation
+        }), 200
+
+    except Exception as e:
+        print(f"Error in /buff-insight: {e}")
+        return jsonify({"message": f"Buff Insight failed: {str(e)}"}), 500
 
 @app.route('/transform', methods=['POST'])
 @token_required
