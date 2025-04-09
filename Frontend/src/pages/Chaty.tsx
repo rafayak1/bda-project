@@ -206,6 +206,12 @@ const checkDatasetStatus = async () => {
 };
 
 const handleSendMessage = async () => {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    navigate('/signup');
+    return;
+  }
+
   if (!message.trim()) return;
 
   const newUserMessage: Message = {
@@ -336,6 +342,11 @@ const handlePreviewDataset = async () => {
 };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const token = localStorage.getItem('token');
+  if (!token) {
+    navigate('/signup');
+    return;
+  }
     const files = event.target.files;
     if (files && files.length > 0) {
       const file = files[0]; // only support 1 file at a time
