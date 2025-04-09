@@ -210,6 +210,54 @@ useEffect(() => {
 }, []);
 // Enable support for webkitSpeechRecognition
 
+const loadChatHistory = async () => {
+  try {
+    // Fetch history and dataset status
+    const [historyRes, statusRes] = await Promise.all([
+      axiosInstance.get('/chat-history', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      }),
+      axiosInstance.get('/dataset-status', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      }),
+    ]);
+
+    const history = historyRes.data.history || [];
+    const { datasetExists, name } = statusRes.data;
+
+    const formattedHistory = history.map((entry: any) => ({
+      id: uuid(),
+      text: entry.content,
+      isUser: entry.role === 'user',
+      timestamp: new Date(entry.timestamp),
+    }));
+
+    const welcomeMessage = {
+      id: uuid(),
+      text: datasetExists
+        ? `🎉 Welcome back, ${name}! I hope you enjoyed your DataBuff experience last time! BuffBot is locked, loaded, and ready to crunch data for you.\n\nYour previously uploaded dataset is all set. Just type a command like "remove column Age" or "filter rows where Salary > 50000" to get started.\n\nNeed inspiration? Type "commands" to see everything I can do — or just say hi. Let's make your data legendary! 💪📊`
+        : `👋 Hey there, ${name}! Welcome to DataBuff! I'm BuffBot, your data-savvy sidekick here at CU Boulder.\n\nBefore we dive into powerful transformations and clever insights, upload a dataset to get the ball rolling.\n\nOnce it's in, you can say things like "show me the columns", "drop missing values", or even ask me to do AI-powered cleaning.\n\nType "commands" anytime to see my powers. Let's turn data into decisions, Buff-style! 🦬⚡`,
+      isUser: false,
+      timestamp: new Date(),
+    };
+
+    setMessages([...formattedHistory, welcomeMessage]);
+
+  } catch (err) {
+    console.error("Failed to load chat history or dataset status:", err);
+    setMessages([{
+      id: uuid(),
+      text: "👋 Welcome to BuffBot! Upload a dataset to get started.",
+      isUser: false,
+      timestamp: new Date(),
+    }]);
+  }
+};
+
+useEffect(() => {
+  loadChatHistory();
+}, []);
+
 
 const handleMicClick = () => {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -289,12 +337,19 @@ const handleSendMessage = async () => {
   setIsLoading(true);
 
   try {
+    // Save user message to chat history
+    await axiosInstance.post(
+      '/chat-history',
+      { role: 'user', content: message },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
     const response = await axiosInstance.post(
       '/transform',
       { command: message },
       {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${token}`,
         },
         withCredentials: true,
       }
@@ -316,12 +371,20 @@ const handleSendMessage = async () => {
     const messagesToAdd: Message[] = [];
 
     if (botText) {
-      messagesToAdd.push({
+      const botMsg = {
         id: uuid(),
         text: botText,
         isUser: false,
         timestamp: new Date(),
-      });
+      };
+      messagesToAdd.push(botMsg);
+
+      // Save bot message to chat history
+      await axiosInstance.post(
+        '/chat-history',
+        { role: 'assistant', content: botText },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
     }
 
     if (image_url) {
@@ -357,12 +420,20 @@ const handleSendMessage = async () => {
     }
 
     if (followup_message) {
-      messagesToAdd.push({
+      const followupMsg = {
         id: uuid(),
         text: followup_message,
         isUser: false,
         timestamp: new Date(),
-      });
+      };
+      messagesToAdd.push(followupMsg);
+
+      // Save follow-up to chat history
+      await axiosInstance.post(
+        '/chat-history',
+        { role: 'assistant', content: followup_message },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
     }
 
     setMessages((prev) => [...prev, ...messagesToAdd]);
