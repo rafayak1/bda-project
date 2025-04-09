@@ -14,6 +14,8 @@ spec:
     spec:
       containers:
         - name: vite-frontend
-          image: gcr.io/bigdataarchitecture-456204/vite-app:latest
+          image: gcr.io/databuff-456300/vite-app:latest
           ports:
             - containerPort: 80
+      imagePullSecrets:
+        - name: gcr-json-key
