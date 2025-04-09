@@ -1,2 +1,4 @@
 .env
 gcp-key.json
+.DS_Store
+node_modules/
