@@ -466,6 +466,106 @@ def match_size_command(cmd):
 def match_describe_command(cmd):
     return cmd.strip() in ["describe", "info", "summary", "data summary"]
 
+@app.route('/buff-clean-options', methods=['GET'])
+@token_required
+def buff_clean_options():
+    try:
+        user_ref = firestore_client.collection('users').document(request.user_id)
+        user_data = user_ref.get().to_dict()
+        dataset_name = user_data.get('updated_dataset') or user_data.get('dataset')
+        file_type = user_data.get('file_type', 'csv')
+        delimiter = ',' if file_type == 'csv' else '\t'
+
+        df = load_dataset(user_data['bucket'], dataset_name, delimiter=delimiter)
+
+        return jsonify({
+            "columns": df.columns.tolist(),
+            "strategies": [
+                "drop_na_rows",
+                "fill_missing_with_mean",
+                "fill_missing_with_median",
+                "fill_missing_with_mode",
+                "label_encode",
+                "one_hot_encode"
+            ]
+        }), 200
+
+    except Exception as e:
+        print(f"Error in /buff-clean-options: {e}")
+        return jsonify({"message": "Failed to fetch cleaning options"}), 500
+
+@app.route('/buff-clean', methods=['POST'])
+@token_required
+def buff_clean():
+    try:
+        user_id = request.user_id
+        data = request.get_json()
+        selected_columns = data.get("columns")
+        strategies = data.get("strategies", [])
+
+        user_ref = firestore_client.collection('users').document(user_id)
+        user_data = user_ref.get().to_dict()
+
+        dataset_name = user_data.get('updated_dataset') or user_data.get('dataset')
+        file_type = user_data.get('file_type', 'csv')
+        delimiter = ',' if file_type == 'csv' else '\t'
+        df = load_dataset(user_data['bucket'], dataset_name, delimiter=delimiter)
+
+        if selected_columns:
+            df_subset = df[selected_columns].copy()
+        else:
+            df_subset = df.copy()
+
+        transformation_summary = []
+
+        for strategy in strategies:
+            if strategy == "drop_na_rows":
+                before = len(df_subset)
+                df_subset.dropna(inplace=True)
+                transformation_summary.append(f"Dropped {before - len(df_subset)} rows with NaN values.")
+            elif strategy == "fill_missing_with_mean":
+                num_cols = df_subset.select_dtypes(include='number').columns
+                df_subset[num_cols] = df_subset[num_cols].fillna(df_subset[num_cols].mean())
+                transformation_summary.append("Filled missing numeric values with mean.")
+            elif strategy == "fill_missing_with_median":
+                num_cols = df_subset.select_dtypes(include='number').columns
+                df_subset[num_cols] = df_subset[num_cols].fillna(df_subset[num_cols].median())
+                transformation_summary.append("Filled missing numeric values with median.")
+            elif strategy == "fill_missing_with_mode":
+                for col in df_subset.columns:
+                    df_subset[col] = df_subset[col].fillna(df_subset[col].mode()[0])
+                transformation_summary.append("Filled missing values with mode.")
+            elif strategy == "label_encode":
+                from sklearn.preprocessing import LabelEncoder
+                for col in df_subset.select_dtypes(include='object').columns:
+                    df_subset[col] = LabelEncoder().fit_transform(df_subset[col])
+                transformation_summary.append("Label encoded categorical columns.")
+            elif strategy == "one_hot_encode":
+                df_subset = pd.get_dummies(df_subset)
+                transformation_summary.append("Applied one-hot encoding on categorical columns.")
+
+        # Replace original columns with cleaned ones
+        if selected_columns:
+            for col in df_subset.columns:
+                df[col] = df_subset[col]
+
+        cleaned_name = f"buff_cleaned_{dataset_name}"
+        save_dataset(user_data['bucket'], cleaned_name, df)
+        user_ref.update({'updated_dataset': cleaned_name})
+
+        blob = storage_client.get_bucket(user_data['bucket']).blob(cleaned_name)
+        download_url = blob.generate_signed_url(expiration=datetime.timedelta(hours=1))
+
+        return jsonify({
+    "transformation_summary": "🧼 Buff Clean complete! Here's what I did:\n\n" + "\n".join([f"● {t}" for t in transformation_summary]),
+    "download_url": download_url,
+    "followup_message": "Would you like to continue using this cleaned dataset? Reply with `yes` or `no`."
+}), 200
+
+    except Exception as e:
+        print(f"Error in /buff-clean: {e}")
+        return jsonify({"message": f"Buff Clean failed: {str(e)}"}), 500
+
 @app.route('/transform', methods=['POST'])
 @token_required
 def transform_dataset():

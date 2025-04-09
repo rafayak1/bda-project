@@ -22,6 +22,7 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import CodeExecutor from '../components/CodeExecutor';
 import ReactMarkdown from 'react-markdown';
+import { Select, MenuItem, InputLabel, FormControl } from '@mui/material'; // ✅ Add to imports if not already there
 
 // Comment out these Firebase imports
 // import { auth } from '../firebase';
@@ -158,6 +159,12 @@ const Chatx: React.FC = () => {
   const [previewColumns, setPreviewColumns] = useState<any[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [code, setCode] = useState("df.head()");
+  const [buffCleanDialogOpen, setBuffCleanDialogOpen] = useState(false);
+  const [cleanTarget, setCleanTarget] = useState<'all' | 'columns' | null>(null);
+  const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
+  const [strategies, setStrategies] = useState<string[]>([]);
+  const [availableColumns, setAvailableColumns] = useState<string[]>([]);
+  const [submittingBuffClean, setSubmittingBuffClean] = useState(false);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -391,25 +398,6 @@ const handlePreviewDataset = async () => {
       event.target.value = '';
     }
   };
-     
-      
-    //   // Simulate bot response to file upload
-    //   setTimeout(() => {
-    //     const botMessage: Message = {
-    //       id: (Date.now() + 1).toString(),
-    //       text: `I've received your document${newFiles.length > 1 ? 's' : ''}. What would you like to know about ${newFiles.length > 1 ? 'them' : 'it'}?`,
-    //       isUser: false,
-    //       timestamp: new Date(),
-    //     };
-    //     setMessages((prev) => [...prev, botMessage]);
-    //   }, 4000);
-    // }
-    
-  //   // Clear the input value so the same file can be uploaded again
-  //   if (event.target) {
-  //     event.target.value = '';
-  //   }
-  // };
 
   const triggerFileUpload = () => {
     fileInputRef.current?.click();
@@ -423,6 +411,64 @@ const handlePreviewDataset = async () => {
       navigate('/login'); // Redirect to login page after logout
     } catch (error) {
       console.error('Logout failed:', error);
+    }
+  };
+
+  const handleBuffClean = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return navigate('/login');
+  
+      const response = await axiosInstance.post(
+        '/buff-clean',
+        {}, // You can later add column/strategy config here
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true,
+        }
+      );
+  
+      const {
+        transformation_summary,
+        download_url,
+        followup_message
+      } = response.data;
+      console.log("Buff Clean response:", response.data);
+  
+      const cleanMessages: Message[] = [
+        {
+          id: uuid(),
+          text: transformation_summary,
+          isUser: false,
+          timestamp: new Date(),
+        },
+        {
+          id: uuid(),
+          text: '',
+          isUser: false,
+          timestamp: new Date(),
+          isFile: true,
+          fileName: 'Cleaned Dataset',
+          downloadUrl: download_url,
+        },
+        {
+          id: uuid(),
+          text: followup_message,
+          isUser: false,
+          timestamp: new Date(),
+        },
+      ];
+  
+      setMessages((prev) => [...prev, ...cleanMessages]);
+    } catch (err: any) {
+      console.error("BuffClean failed:", err);
+      const errorMsg: Message = {
+        id: uuid(),
+        text: err.response?.data?.message || 'Buff Clean failed.',
+        isUser: false,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
     }
   };
 
@@ -539,6 +585,21 @@ const handlePreviewDataset = async () => {
       View Dataset
     </ActionButton>
   )}
+{hasUploaded && (
+  <ActionButton onClick={async () => {
+    try {
+      const res = await axiosInstance.get('/buff-clean-options', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      setAvailableColumns(res.data.columns);
+      setBuffCleanDialogOpen(true);
+    } catch (err) {
+      console.error('Failed to fetch Buff Clean options:', err);
+    }
+  }}>
+    Buff Clean 🧼
+  </ActionButton>
+)}
 </Box>
               </Tooltip>
             </Box>
@@ -676,6 +737,131 @@ const handlePreviewDataset = async () => {
   disableSelectionOnClick
 />
       </div>
+    )}
+  </DialogContent>
+</Dialog>
+<Dialog open={buffCleanDialogOpen} onClose={() => setBuffCleanDialogOpen(false)} maxWidth="sm" fullWidth>
+  <DialogTitle>Buff Clean 🧼</DialogTitle>
+  <DialogContent>
+    {cleanTarget === null && (
+      <Box display="flex" gap={2} mt={2}>
+        <Button fullWidth variant="contained" onClick={() => setCleanTarget('all')}>
+          Clean Whole Dataset
+        </Button>
+        <Button fullWidth variant="outlined" onClick={() => setCleanTarget('columns')}>
+          Choose Columns
+        </Button>
+      </Box>
+    )}
+
+    {cleanTarget && (
+      <>
+        {cleanTarget === 'columns' && (
+          <Box mt={3}>
+            <Typography>Select Columns to Clean:</Typography>
+            <FormControl fullWidth sx={{ mt: 2 }}>
+  <InputLabel id="column-select-label">Select Columns</InputLabel>
+  <Select
+    labelId="column-select-label"
+    multiple
+    value={selectedColumns}
+    onChange={(e) => setSelectedColumns(e.target.value as string[])}
+    renderValue={(selected) => selected.join(', ')}
+  >
+    {availableColumns.map((col) => (
+      <MenuItem key={col} value={col}>
+        {col}
+      </MenuItem>
+    ))}
+  </Select>
+</FormControl>
+          </Box>
+        )}
+
+        <Box mt={3}>
+          <Typography>Choose Cleaning Strategies:</Typography>
+          {[
+            { value: 'drop_na_rows', label: 'Drop rows with missing values' },
+            { value: 'fill_missing_with_mean', label: 'Fill missing values with mean' },
+            { value: 'fill_missing_with_median', label: 'Fill missing values with median' },
+            { value: 'fill_missing_with_mode', label: 'Fill missing values with mode' },
+            { value: 'label_encode', label: 'Label encode categorical columns' },
+            { value: 'one_hot_encode', label: 'One-hot encode categorical columns' },
+          ].map((opt) => (
+            <Box key={opt.value}>
+              <label>
+                <input
+                  type="checkbox"
+                  value={opt.value}
+                  checked={strategies.includes(opt.value)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setStrategies((prev) =>
+                      checked ? [...prev, opt.value] : prev.filter((s) => s !== opt.value)
+                    );
+                  }}
+                />
+                {" " + opt.label}
+              </label>
+            </Box>
+          ))}
+        </Box>
+
+        <Box mt={3}>
+          <Button
+            variant="contained"
+            disabled={submittingBuffClean}
+            onClick={async () => {
+              setSubmittingBuffClean(true);
+              try {
+                const res = await axiosInstance.post('/buff-clean', {
+                  columns: cleanTarget === 'columns' ? selectedColumns : null,
+                  strategies,
+                }, {
+                  headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                });
+
+                const { transformation_summary, download_url, followup_message } = res.data;
+
+                const cleanMessages = [
+                  {
+                    id: uuid(),
+                    text: transformation_summary,
+                    isUser: false,
+                    timestamp: new Date(),
+                  },
+                  {
+                    id: uuid(),
+                    text: '',
+                    isUser: false,
+                    timestamp: new Date(),
+                    isFile: true,
+                    fileName: 'Download Transformed Dataset',
+                    downloadUrl: download_url,
+                  },
+                  {
+                    id: uuid(),
+                    text: followup_message,
+                    isUser: false,
+                    timestamp: new Date(),
+                  },
+                ];
+                setMessages((prev) => [...prev, ...cleanMessages]);
+              } catch (err) {
+                console.error('Buff Clean failed:', err);
+              } finally {
+                setSubmittingBuffClean(false);
+                setBuffCleanDialogOpen(false);
+                setCleanTarget(null);
+                setStrategies([]);
+                setSelectedColumns([]);
+              }
+            }}
+          >
+            Apply Buff Clean
+          </Button>
+        </Box>
+      </>
     )}
   </DialogContent>
 </Dialog>
