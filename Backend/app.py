@@ -600,6 +600,102 @@ def buff_clean():
         print(f"Error in /buff-clean: {e}")
         return jsonify({"message": f"Buff Clean failed: {str(e)}"}), 500
 
+@app.route('/buff-visualizer-options', methods=['GET'])
+@token_required
+def buff_visualizer_options():
+    try:
+        user_ref = firestore_client.collection('users').document(request.user_id)
+        user_data = user_ref.get().to_dict()
+        dataset_name = user_data.get('updated_dataset') or user_data.get('dataset')
+        file_type = user_data.get('file_type', 'csv')
+        delimiter = ',' if file_type == 'csv' else '\t'
+
+        df = load_dataset(user_data['bucket'], dataset_name, delimiter=delimiter)
+
+        numeric_columns = df.select_dtypes(include='number').columns.tolist()
+        categorical_columns = df.select_dtypes(include='object').columns.tolist()
+
+        return jsonify({
+            "numeric_columns": numeric_columns,
+            "categorical_columns": categorical_columns,
+            "all_columns": df.columns.tolist()
+        }), 200
+
+    except Exception as e:
+        print(f"Error in /buff-visualizer-options: {e}")
+        return jsonify({"message": "Failed to load visualizer options."}), 500
+
+@app.route('/buff-visualizer', methods=['POST'])
+@token_required
+def buff_visualizer():
+    try:
+        user_id = request.user_id
+        data = request.get_json()
+        chart_type = data.get("chart_type")  
+        x_col = data.get("x")
+        y_col = data.get("y", None)
+
+        if not chart_type or not x_col:
+            return jsonify({"message": "Missing chart type or x column"}), 400
+
+        # Load dataset
+        user_ref = firestore_client.collection('users').document(user_id)
+        user_data = user_ref.get().to_dict()
+        dataset_name = user_data.get('updated_dataset') or user_data.get('dataset')
+        file_type = user_data.get('file_type', 'csv')
+        delimiter = ',' if file_type == 'csv' else '\t'
+
+        df = load_dataset(user_data['bucket'], dataset_name, delimiter=delimiter)
+
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+
+        plt.figure(figsize=(10, 6))
+
+        if chart_type == 'bar':
+            df[x_col].value_counts().plot(kind='bar')
+        elif chart_type == 'line':
+            if y_col:
+                plt.plot(df[x_col], df[y_col])
+            else:
+                return jsonify({"message": "Y column required for line chart"}), 400
+        elif chart_type == 'hist':
+            df[x_col].plot(kind='hist', bins=20)
+        elif chart_type == 'scatter':
+            if y_col:
+                df.plot(kind='scatter', x=x_col, y=y_col)
+            else:
+                return jsonify({"message": "Y column required for scatter plot"}), 400
+        else:
+            return jsonify({"message": "Unsupported chart type"}), 400
+
+        plt.title(f"{chart_type.title()} Plot of {x_col}" + (f" vs {y_col}" if y_col else ""))
+        plt.xlabel(x_col)
+        if y_col:
+            plt.ylabel(y_col)
+
+        # Save and upload to GCS
+        image_path = f"{user_id}_buff_visualizer.png"
+        plt.tight_layout()
+        plt.savefig(image_path)
+        plt.close()
+
+        bucket = storage_client.get_bucket(user_data['bucket'])
+        blob = bucket.blob(image_path)
+        blob.upload_from_filename(image_path)
+        os.remove(image_path)
+
+        image_url = blob.generate_signed_url(expiration=datetime.timedelta(hours=1))
+
+        return jsonify({
+            "message": f"Here's your {chart_type} chart!",
+            "image_url": image_url
+        }), 200
+
+    except Exception as e:
+        return jsonify({"message": f"Buff Visualizer failed: {str(e)}"}), 500
+
 @app.route('/transform', methods=['POST'])
 @token_required
 def transform_dataset():
