@@ -34,7 +34,9 @@ app = Flask(__name__)
 
 CORS(app, supports_credentials=True, origins=[
     "http://localhost:5173",
-    "http://127.0.0.1:5173"
+    "http://127.0.0.1:5173",
+    "http://34.68.101.174", 
+    "http://34.133.49.171", #External IP
 ])
 # CORS(app, supports_credentials=True, resources={r"/signup": {"origins": "http://localhost:5173"}})
 # CORS(app, supports_credentials=True, resources={r"/login": {"origins": "http://localhost:5173"}})
@@ -1089,5 +1091,13 @@ def preview_dataset():
         print(f"Error in /preview: {e}")
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
+@app.route("/health", methods=["GET"])
+def health_check():
+    return jsonify({"status": "healthy"}), 200
+
+# if __name__ == '__main__':
+#     app.run(debug=True)
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
+
