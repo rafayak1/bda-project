@@ -116,8 +116,6 @@ docker push gcr.io/databuff-456300/flask-backend:latest
 
 kubectl apply -f k8s/backend-deployment.yaml
 
-kubectl apply -f k8s/backend-service.yaml
-
 
 
 ## 🧠 Credits
