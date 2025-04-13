@@ -16,9 +16,9 @@ import json
 import requests
 import re
 import matplotlib
-matplotlib.use('Agg')  # ✅ Non-GUI backend set first
+matplotlib.use('Agg')  
 
-import matplotlib.pyplot as plt  # ✅ Must be imported AFTER backend
+import matplotlib.pyplot as plt  
 from io import StringIO
 import sys
 import black
@@ -26,6 +26,7 @@ import subprocess
 import tempfile
 import re
 import logging
+import ast
 
 
 
@@ -65,8 +66,24 @@ logger = logging.getLogger(__name__)
 firestore_client = firestore.Client()
 storage_client = storage.Client()
 
-
-
+def fetch_recent_chat_history(user_id, limit=10):
+    try:
+        history_ref = firestore_client.collection('users').document(user_id).collection('chat_history')
+        query = history_ref.order_by("timestamp", direction=firestore.Query.DESCENDING).limit(limit).stream()
+        history = [{"role": doc.to_dict()['role'], "content": doc.to_dict()['content']} for doc in reversed(list(query))]
+        return history
+    except Exception as e:
+        logger.error(f"Error fetching chat history: {e}")
+        return []
+    
+def append_to_chat_history(user_id, role, content):
+    """Store the latest chat message in Firestore."""
+    chat_ref = firestore_client.collection("users").document(user_id).collection("chat_history")
+    chat_ref.add({
+        "role": role,  # 'user' or 'assistant'
+        "content": content,
+        "timestamp": datetime.datetime.utcnow()
+    })
 def detect_undefined_names(code):
     """
     Use flake8 to detect undefined variables in the provided code.
@@ -93,15 +110,23 @@ def detect_undefined_names(code):
     finally:
         os.unlink(temp_path)
 
-def clean_ai_code(code: str):
+def clean_ai_code(raw_code: str):
+    # Remove markdown code block (```python ... ```)
+    code = re.sub(r"^```(?:python)?\s*", "", raw_code.strip(), flags=re.IGNORECASE)
+    code = re.sub(r"\s*```$", "", code)
+
+    # Strip stray backticks, labels, and whitespace
     code = code.strip("` \n")
     code = code.replace("python", "").strip()
 
+    # Normalize imports (e.g., remove double spacing)
     code = re.sub(r"import\s*([a-zA-Z0-9_]+)", r"import \1", code)
     code = re.sub(r"from\s+([a-zA-Z0-9_.]+)\s+import\s+([a-zA-Z0-9_,\s]+)", r"from \1 import \2", code)
 
+    # Clean each line
     lines = code.split('\n')
     stripped_lines = [line.strip() for line in lines if line.strip()]
+
     return '\n'.join(stripped_lines)
 
 def is_likely_transformation(prompt: str):
@@ -128,7 +153,8 @@ def ensure_dataframe_has_id(df):
     return df
 
 
-def call_openrouter(prompt, df=None, mode="transform"):
+def call_openrouter(prompt, df=None, mode="transform", history=None):
+    history = history or []
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
         raise ValueError("Missing OpenRouter API key")
@@ -153,6 +179,7 @@ def call_openrouter(prompt, df=None, mode="transform"):
         user_prompt = f"Given this command: '{prompt}', write Python pandas code to perform this on a dataframe named df."
 
     else:  # mode == "chat"
+        logger.info("in chat mode)")
         columns = df.columns.tolist() if df is not None else []
         print("Columns:", columns)
         preview = df.head(5).to_dict(orient='records') if df is not None else []
@@ -165,19 +192,23 @@ def call_openrouter(prompt, df=None, mode="transform"):
             f"Here is a preview:\n{preview}"
         )
         user_prompt = prompt
+        
+    messages = [
+        {"role": "system", "content": system_prompt}
+    ] + history + [  
+        {"role": "user", "content": user_prompt}
+    ]
 
     body = {
         "model": "openrouter/quasar-alpha",
         "temperature": 0.2,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
+        "messages": messages,
     }
 
-    print("SENDING REQUEST:\n", json.dumps(body, indent=2))
     response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=body)
     response.raise_for_status()
+    
+    logger.info(f"OpenRouter response: {response.json()}")
 
     result = response.json()
     return result['choices'][0]['message']['content']
@@ -442,10 +473,7 @@ def upload_dataset():
 def logout():
     logout_user()
     return jsonify({"message": "Logged out successfully"}), 200
-def clean_ai_code(raw_code: str):
-    code = re.sub(r"^```(?:python)?\s*", "", raw_code.strip(), flags=re.IGNORECASE)
-    code = re.sub(r"\s*```$", "", code)
-    return code.strip()
+
 def match_column_command(cmd):
     patterns = [
         r"^(what|show|list|give|tell).*(column|columns)",
@@ -698,6 +726,151 @@ def buff_visualizer():
     except Exception as e:
         return jsonify({"message": f"Buff Visualizer failed: {str(e)}"}), 500
 
+@app.route('/buff-trainer-options', methods=['GET'])
+@token_required
+def buff_trainer_options():
+    try:
+        user_ref = firestore_client.collection('users').document(request.user_id)
+        user_data = user_ref.get().to_dict()
+        dataset_name = user_data.get('updated_dataset') or user_data.get('dataset')
+        file_type = user_data.get('file_type', 'csv')
+        delimiter = ',' if file_type == 'csv' else '\t'
+
+        df = load_dataset(user_data['bucket'], dataset_name, delimiter=delimiter)
+        numeric_columns = df.select_dtypes(include='number').columns.tolist()
+
+        return jsonify({
+            "columns": df.columns.tolist(),
+            "numeric_columns": numeric_columns,
+            "models": ["Linear Regression", "Random Forest", "Decision Tree"]
+        }), 200
+
+    except Exception as e:
+        print(f"Error in /buff-trainer-options: {e}")
+        return jsonify({"message": "Failed to fetch training options"}), 500
+
+@app.route('/buff-trainer', methods=['POST'])
+@token_required
+def buff_trainer():
+    try:
+        data = request.get_json()
+        features = data.get('features')
+        target = data.get('target')
+        model_type = data.get('model_type')
+
+        if not features or not target or not model_type:
+            return jsonify({"message": "Missing features, target, or model type"}), 400
+
+        user_ref = firestore_client.collection('users').document(request.user_id)
+        user_data = user_ref.get().to_dict()
+        dataset_name = user_data.get('updated_dataset') or user_data.get('dataset')
+        file_type = user_data.get('file_type', 'csv')
+        delimiter = ',' if file_type == 'csv' else '\t'
+
+        df = load_dataset(user_data['bucket'], dataset_name, delimiter=delimiter)
+        df = df.dropna(subset=features + [target])
+
+        from sklearn.model_selection import train_test_split
+        from sklearn.linear_model import LinearRegression
+        from sklearn.ensemble import RandomForestRegressor
+        from sklearn.tree import DecisionTreeRegressor
+        from sklearn.metrics import mean_squared_error, r2_score
+        import pickle
+
+        X = df[features]
+        y = df[target]
+
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        if model_type == "Linear Regression":
+            model = LinearRegression()
+        elif model_type == "Random Forest":
+            model = RandomForestRegressor()
+        elif model_type == "Decision Tree":
+            model = DecisionTreeRegressor()
+        else:
+            return jsonify({"message": "Unsupported model type"}), 400
+
+        model.fit(X_train, y_train)
+        predictions = model.predict(X_test)
+
+        mse = mean_squared_error(y_test, predictions)
+        r2 = r2_score(y_test, predictions)
+
+        # Save model to GCS
+        model_file = f"{request.user_id}_trained_model.pkl"
+        with open(model_file, 'wb') as f:
+            pickle.dump(model, f)
+
+        bucket = storage_client.get_bucket(user_data['bucket'])
+        blob = bucket.blob(model_file)
+        blob.upload_from_filename(model_file)
+        os.remove(model_file)
+        model_url = blob.generate_signed_url(expiration=datetime.timedelta(hours=1))
+
+        return jsonify({
+            "summary": f"📊 Model: {model_type}\n\nR² Score: {r2:.4f}\n\nMSE: {mse:.4f}",
+            "download_url": model_url
+        }), 200
+
+    except Exception as e:
+        print(f"Error in /buff-trainer: {e}")
+        return jsonify({"message": "Training failed: " + str(e)}), 500
+
+@app.route('/buff-insight', methods=['GET'])
+@token_required
+def buff_insight():
+    try:
+        user_ref = firestore_client.collection('users').document(request.user_id)
+        user_data = user_ref.get().to_dict()
+        dataset_name = user_data.get('updated_dataset') or user_data.get('dataset')
+        file_type = user_data.get('file_type', 'csv')
+        delimiter = ',' if file_type == 'csv' else '\t'
+
+        df = load_dataset(user_data['bucket'], dataset_name, delimiter=delimiter)
+
+        # Generate data summary components
+        describe = df.describe(include='all').to_dict()
+        correlation = df.corr(numeric_only=True).to_dict()
+        columns = df.columns.tolist()
+        preview = df.head(5).to_dict(orient='records')
+
+        # Prepare context strings
+        describe_str = json.dumps(describe, indent=2)
+        correlation_str = json.dumps(correlation, indent=2)
+        columns_str = ", ".join(columns)
+        preview_str = json.dumps(preview, indent=2)
+
+        # Updated prompt with full context
+        ai_prompt = (
+            f"Here is a summary of the dataset:\n\n"
+            f"Columns: {columns_str}\n\n"
+            f"First few rows:\n{preview_str}\n\n"
+            f"Describe statistics:\n{describe_str}\n\n"
+            f"Correlation matrix:\n{correlation_str}\n\n"
+            "Now, generate a concise natural language summary of this dataset. "
+            "Mention number of rows and columns, identify skewed or unusual distributions, "
+            "strong correlations (r > 0.75), and any interesting trends. "
+            "Make it helpful, friendly, and easy to understand."
+            "Make sure the title of your summary is 'BuffInsight' and it is in markdown format."
+            )
+
+        explanation = call_openrouter(
+            prompt=ai_prompt,
+            df=df,
+            mode="chat"  
+        )
+        
+        logger.info(f"Generated Insight: {explanation}")
+
+        return jsonify({
+            "summary_markdown": explanation
+        }), 200
+
+    except Exception as e:
+        print(f"Error in /buff-insight: {e}")
+        return jsonify({"message": f"Buff Insight failed: {str(e)}"}), 500
+
 @app.route('/transform', methods=['POST'])
 @token_required
 def transform_dataset():
@@ -770,7 +943,24 @@ def transform_dataset():
 
         # Handle non-transformational queries (chat)
         if not is_likely_transformation(command):
-            ai_response = call_openrouter(command, df, mode="chat")
+            # Get recent chat history
+            history_ref = firestore_client.collection("users").document(user_id).collection("chat_history")
+            recent_messages = history_ref.order_by("timestamp", direction=firestore.Query.DESCENDING).limit(5).stream()
+
+            history = []
+            for doc in reversed(list(recent_messages)):
+                entry = doc.to_dict()
+                history.append({"role": entry["role"], "content": entry["content"]})
+
+            # Append current user prompt
+            history.append({"role": "user", "content": command})
+
+            # Call OpenRouter with full context
+            ai_response = call_openrouter(command, df=df, mode="chat", history=history)
+
+            # Save the AI's reply and user prompt
+            # append_to_chat_history(user_id, "user", command)
+            # append_to_chat_history(user_id, "assistant", ai_response.strip())
             stripped = ai_response.strip()
             if any(stripped.startswith(p) for p in ['df.', 'df.describe', 'df.shape']):
                 try:
@@ -784,11 +974,30 @@ def transform_dataset():
             return jsonify({"message": ai_response}), 200
 
         # === AI Transformation Code ===
-        ai_code = clean_ai_code(call_openrouter(command, df, mode="transform"))
+        # Get recent chat history
+        history_ref = firestore_client.collection("users").document(user_id).collection("chat_history")
+        recent_messages = history_ref.order_by("timestamp", direction=firestore.Query.DESCENDING).limit(5).stream()
+
+        history = []
+        for doc in reversed(list(recent_messages)):
+            entry = doc.to_dict()
+            history.append({"role": entry["role"], "content": entry["content"]})
+
+        # Append current user prompt
+        history.append({"role": "user", "content": command})
+
+        # Call OpenRouter with full context
+        ai_code = call_openrouter(command, df=df, mode="transform", history=history)
+        ai_code = clean_ai_code(ai_code)
+        # ai_code = detect_undefined_names(ai_code)
+
+        # Save the AI's reply and user prompt
+        # append_to_chat_history(user_id, "user", command)
+        # append_to_chat_history(user_id, "assistant", ai_code.strip())
         ai_code = ai_code.replace("plt.show()", "")
         print("AI GENERATED CODE:\n", ai_code)
 
-        if any(keyword in ai_code for keyword in ["plt.", "df.plot", "df.plot.", "df.plot("]):
+        if any(keyword in ai_code for keyword in ["plt.", "df.plot", "df.plot.", "df.plot(", "sns.", "sns.scatterplot", "sns.lineplot", "sns.barplot"]):
             try:
                 local_vars = {'df': df.copy()}
                 exec(ai_code, {}, local_vars)
@@ -854,39 +1063,37 @@ def transform_dataset():
         print(f"Error in transform_dataset: {e}")
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
+@app.route('/chat-history', methods=['GET'])
+@token_required
+def get_chat_history():
+    try:
+        history = fetch_recent_chat_history(request.user_id, limit=20)
+        return jsonify({"history": history}), 200
+    except Exception as e:
+        logger.error(f"Error fetching chat history: {e}")
+        return jsonify({"message": "Failed to retrieve chat history"}), 500
 
-# def apply_predefined_transformation(df, command):
-    """
-    Apply supported transformations to the dataframe.
-    """
-    # Normalize column names for robust matching
-    column_map = {col.strip().lower(): col for col in df.columns}
-    if command.startswith("remove column"):
-        column = command.split("remove column")[-1].strip().lower()
-        if column in column_map:
-            df = df.drop(columns=[column_map[column]])
-        else:
-            raise ValueError(f"Column '{column}' does not exist in the dataset.")
-    elif command.startswith("rename column"):
-        parts = command.split("rename column")[-1].strip().split("to")
-        if len(parts) == 2:
-            old_name, new_name = parts[0].strip().lower(), parts[1].strip()
-            if old_name in column_map:
-                df = df.rename(columns={column_map[old_name]: new_name})
-            else:
-                raise ValueError(f"Column '{parts[0].strip()}' does not exist in the dataset.")
-        else:
-            raise ValueError("Invalid rename command. Use 'rename column <old_name> to <new_name>'.")
-    elif command.startswith("filter rows where"):
-        condition = command.split("filter rows where")[-1].strip()
-        try:
-            df = df.query(condition)
-        except Exception as e:
-            raise ValueError(f"Error in filter condition: {e}")
-    else:
-        raise ValueError("Unsupported command.")
-    
-    return df
+@app.route('/chat-history', methods=['POST'])
+@token_required
+def save_chat_message():
+    try:
+        user_id = request.user_id
+        data = request.json
+        role = data.get("role")
+        content = data.get("content")
+        if not role or not content:
+            return jsonify({"message": "Role and content are required."}), 400
+
+        history_ref = firestore_client.collection("users").document(user_id).collection("chat_history")
+        history_ref.add({
+            "role": role,
+            "content": content,
+            "timestamp": firestore.SERVER_TIMESTAMP
+        })
+
+        return jsonify({"message": "Message saved"}), 200
+    except Exception as e:
+        return jsonify({"message": f"Failed to save chat message: {str(e)}"}), 500
 
 #Dataset-status
 @app.route('/dataset-status', methods=['GET'])
@@ -906,8 +1113,6 @@ def dataset_status():
     except Exception as e:
         print(f"Error in dataset_status: {e}")
         return jsonify({"message": f"Failed to check dataset status."}), 500
-
-import ast
 
 @app.route('/run-code', methods=['POST'])
 @token_required
