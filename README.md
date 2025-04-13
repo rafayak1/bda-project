@@ -77,7 +77,7 @@ Access at: `http://localhost:5173`
 2. Push to GCR
 3. Create K8s manifests for both
 4. Setup GKE cluster
-5. Deploy with `kubectl apply -f ...`
+5. Deploy with kubectl apply -f ...
 6. Access app via external LoadBalancer IP
 
 ⸻
@@ -94,15 +94,29 @@ terraform apply
 
 terraform destroy( To destroy infrastructure)
 
-## Commands for Deployment
+## Commands for Frontend Deployment
 
 docker buildx build --platform linux/amd64 -t gcr.io/databuff-456300/vite-app:latest .
 
- docker push gcr.io/databuff-456300/vite-app:latest
+docker push gcr.io/databuff-456300/vite-app:latest
 
 kubectl apply -f k8s/deployment.yaml
 
 kubectl apply -f k8s/service.yaml
+
+## Restart the Frontend Deployment on GKE
+
+kubectl rollout restart deployment vite-frontend
+
+## Commands for Backend Deployment
+
+docker buildx build --platform linux/amd64 -t gcr.io/databuff-456300/flask-backend:latest .
+
+docker push gcr.io/databuff-456300/flask-backend:latest
+
+kubectl apply -f k8s/backend-deployment.yaml
+
+kubectl apply -f k8s/backend-service.yaml
 
 
 
