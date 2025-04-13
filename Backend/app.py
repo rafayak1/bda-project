@@ -198,7 +198,7 @@ def call_openrouter(prompt, df=None, mode="transform", history=None):
     ]
 
     body = {
-        "model": "openrouter/quasar-alpha",
+        "model": "google/gemini-2.5-pro-exp-03-25:free",
         "temperature": 0.2,
         "messages": messages,
     }
