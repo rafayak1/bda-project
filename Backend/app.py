@@ -198,7 +198,7 @@ def call_openrouter(prompt, df=None, mode="transform", history=None):
     ]
 
     body = {
-        "model": "google/gemini-2.5-pro-exp-03-25:free",
+        "model": "openrouter/optimus-alpha",
         "temperature": 0.2,
         "messages": messages,
     }
@@ -908,6 +908,7 @@ def transform_dataset():
         dataset_to_use = user_data.get('updated_dataset') or current_dataset
         delimiter = ',' if file_type == 'csv' else '\t'
         df = load_dataset(bucket_name, dataset_to_use, delimiter=delimiter)
+            
         lower_cmd = command.lower()
 
         # Descriptive command handlers
