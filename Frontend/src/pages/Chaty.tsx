@@ -31,6 +31,15 @@ interface Window {
   SpeechRecognition: any;
 
 }
+import { Select, MenuItem, InputLabel, FormControl } from '@mui/material'; 
+import Lottie from "lottie-react";
+import typingAnimation from "../assets/ai-typing.json";
+
+interface Window {
+  webkitSpeechRecognition: any;
+  SpeechRecognition: any;
+
+}
 
 // Styled components with updated color scheme
 const ChatContainer = styled(Paper)(({ theme }) => ({
@@ -46,6 +55,8 @@ const ChatContainer = styled(Paper)(({ theme }) => ({
 const MessagesContainer = styled(Box)(({ theme }) => ({
   height: '400px',
   overflowY: 'auto',
+  display: 'flex',
+  flexDirection: 'column-reverse', // 👈 this is key
   border: '1px solid rgba(75, 85, 99, 0.3)',
   padding: theme.spacing(2),
   marginBottom: theme.spacing(2),
@@ -191,10 +202,10 @@ const Chatx: React.FC = () => {
   const [buffInsightLoading, setBuffInsightLoading] = useState(false);
   const [buffInsightMarkdown, setBuffInsightMarkdown] = useState('');
 
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  // // Scroll to bottom when messages change
+  // useEffect(() => {
+  //   messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // }, [messages]);
 
   useEffect(() => {
     checkDatasetStatus();

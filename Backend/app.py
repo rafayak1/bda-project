@@ -17,7 +17,9 @@ import requests
 import re
 import matplotlib
 matplotlib.use('Agg')  
+matplotlib.use('Agg')  
 
+import matplotlib.pyplot as plt  
 import matplotlib.pyplot as plt  
 from io import StringIO
 import sys
@@ -26,6 +28,7 @@ import subprocess
 import tempfile
 import re
 import logging
+import ast
 import ast
 
 
@@ -84,6 +87,24 @@ def append_to_chat_history(user_id, role, content):
         "content": content,
         "timestamp": datetime.datetime.utcnow()
     })
+def fetch_recent_chat_history(user_id, limit=10):
+    try:
+        history_ref = firestore_client.collection('users').document(user_id).collection('chat_history')
+        query = history_ref.order_by("timestamp", direction=firestore.Query.DESCENDING).limit(limit).stream()
+        history = [{"role": doc.to_dict()['role'], "content": doc.to_dict()['content']} for doc in reversed(list(query))]
+        return history
+    except Exception as e:
+        logger.error(f"Error fetching chat history: {e}")
+        return []
+    
+def append_to_chat_history(user_id, role, content):
+    """Store the latest chat message in Firestore."""
+    chat_ref = firestore_client.collection("users").document(user_id).collection("chat_history")
+    chat_ref.add({
+        "role": role,  # 'user' or 'assistant'
+        "content": content,
+        "timestamp": datetime.datetime.utcnow()
+    })
 def detect_undefined_names(code):
     """
     Use flake8 to detect undefined variables in the provided code.
@@ -116,16 +137,25 @@ def clean_ai_code(raw_code: str):
     code = re.sub(r"\s*```$", "", code)
 
     # Strip stray backticks, labels, and whitespace
+def clean_ai_code(raw_code: str):
+    # Remove markdown code block (```python ... ```)
+    code = re.sub(r"^```(?:python)?\s*", "", raw_code.strip(), flags=re.IGNORECASE)
+    code = re.sub(r"\s*```$", "", code)
+
+    # Strip stray backticks, labels, and whitespace
     code = code.strip("` \n")
     code = code.replace("python", "").strip()
 
+    # Normalize imports (e.g., remove double spacing)
     # Normalize imports (e.g., remove double spacing)
     code = re.sub(r"import\s*([a-zA-Z0-9_]+)", r"import \1", code)
     code = re.sub(r"from\s+([a-zA-Z0-9_.]+)\s+import\s+([a-zA-Z0-9_,\s]+)", r"from \1 import \2", code)
 
     # Clean each line
+    # Clean each line
     lines = code.split('\n')
     stripped_lines = [line.strip() for line in lines if line.strip()]
+
 
     return '\n'.join(stripped_lines)
 
@@ -155,6 +185,8 @@ def ensure_dataframe_has_id(df):
 
 def call_openrouter(prompt, df=None, mode="transform", history=None):
     history = history or []
+def call_openrouter(prompt, df=None, mode="transform", history=None):
+    history = history or []
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
         raise ValueError("Missing OpenRouter API key")
@@ -175,10 +207,12 @@ def call_openrouter(prompt, df=None, mode="transform", history=None):
             "You're a data scientist. Return only executable pandas code to transform a DataFrame named df.\n"
             f"Here are the columns:\n{columns}\n\n"
             f"Here is a preview:\n{preview}"
+            "Do not include comments in your code"
         )
         user_prompt = f"Given this command: '{prompt}', write Python pandas code to perform this on a dataframe named df."
 
     else:  # mode == "chat"
+        logger.info("in chat mode)")
         logger.info("in chat mode)")
         columns = df.columns.tolist() if df is not None else []
         print("Columns:", columns)
@@ -190,6 +224,7 @@ def call_openrouter(prompt, df=None, mode="transform", history=None):
             "and feel free to chat casually. Be helpful and conversational.\n"
             f"Here are the columns:\n{columns}\n\n"
             f"Here is a preview:\n{preview}"
+            "Whenever you recieve any error as prompt, briefly explain the error and provide a solution to fix it."
         )
         user_prompt = prompt
         
@@ -200,13 +235,15 @@ def call_openrouter(prompt, df=None, mode="transform", history=None):
     ]
 
     body = {
-        "model": "openrouter/quasar-alpha",
+        "model": "openrouter/optimus-alpha",
         "temperature": 0.2,
         "messages": messages,
     }
 
     response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=body)
     response.raise_for_status()
+    
+    logger.info(f"OpenRouter response: {response.json()}")
     
     logger.info(f"OpenRouter response: {response.json()}")
 
@@ -473,6 +510,7 @@ def upload_dataset():
 def logout():
     logout_user()
     return jsonify({"message": "Logged out successfully"}), 200
+
 
 def match_column_command(cmd):
     patterns = [
@@ -871,6 +909,151 @@ def buff_insight():
         print(f"Error in /buff-insight: {e}")
         return jsonify({"message": f"Buff Insight failed: {str(e)}"}), 500
 
+@app.route('/buff-trainer-options', methods=['GET'])
+@token_required
+def buff_trainer_options():
+    try:
+        user_ref = firestore_client.collection('users').document(request.user_id)
+        user_data = user_ref.get().to_dict()
+        dataset_name = user_data.get('updated_dataset') or user_data.get('dataset')
+        file_type = user_data.get('file_type', 'csv')
+        delimiter = ',' if file_type == 'csv' else '\t'
+
+        df = load_dataset(user_data['bucket'], dataset_name, delimiter=delimiter)
+        numeric_columns = df.select_dtypes(include='number').columns.tolist()
+
+        return jsonify({
+            "columns": df.columns.tolist(),
+            "numeric_columns": numeric_columns,
+            "models": ["Linear Regression", "Random Forest", "Decision Tree"]
+        }), 200
+
+    except Exception as e:
+        print(f"Error in /buff-trainer-options: {e}")
+        return jsonify({"message": "Failed to fetch training options"}), 500
+
+@app.route('/buff-trainer', methods=['POST'])
+@token_required
+def buff_trainer():
+    try:
+        data = request.get_json()
+        features = data.get('features')
+        target = data.get('target')
+        model_type = data.get('model_type')
+
+        if not features or not target or not model_type:
+            return jsonify({"message": "Missing features, target, or model type"}), 400
+
+        user_ref = firestore_client.collection('users').document(request.user_id)
+        user_data = user_ref.get().to_dict()
+        dataset_name = user_data.get('updated_dataset') or user_data.get('dataset')
+        file_type = user_data.get('file_type', 'csv')
+        delimiter = ',' if file_type == 'csv' else '\t'
+
+        df = load_dataset(user_data['bucket'], dataset_name, delimiter=delimiter)
+        df = df.dropna(subset=features + [target])
+
+        from sklearn.model_selection import train_test_split
+        from sklearn.linear_model import LinearRegression
+        from sklearn.ensemble import RandomForestRegressor
+        from sklearn.tree import DecisionTreeRegressor
+        from sklearn.metrics import mean_squared_error, r2_score
+        import pickle
+
+        X = df[features]
+        y = df[target]
+
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        if model_type == "Linear Regression":
+            model = LinearRegression()
+        elif model_type == "Random Forest":
+            model = RandomForestRegressor()
+        elif model_type == "Decision Tree":
+            model = DecisionTreeRegressor()
+        else:
+            return jsonify({"message": "Unsupported model type"}), 400
+
+        model.fit(X_train, y_train)
+        predictions = model.predict(X_test)
+
+        mse = mean_squared_error(y_test, predictions)
+        r2 = r2_score(y_test, predictions)
+
+        # Save model to GCS
+        model_file = f"{request.user_id}_trained_model.pkl"
+        with open(model_file, 'wb') as f:
+            pickle.dump(model, f)
+
+        bucket = storage_client.get_bucket(user_data['bucket'])
+        blob = bucket.blob(model_file)
+        blob.upload_from_filename(model_file)
+        os.remove(model_file)
+        model_url = blob.generate_signed_url(expiration=datetime.timedelta(hours=1))
+
+        return jsonify({
+            "summary": f"📊 Model: {model_type}\n\nR² Score: {r2:.4f}\n\nMSE: {mse:.4f}",
+            "download_url": model_url
+        }), 200
+
+    except Exception as e:
+        print(f"Error in /buff-trainer: {e}")
+        return jsonify({"message": "Training failed: " + str(e)}), 500
+
+@app.route('/buff-insight', methods=['GET'])
+@token_required
+def buff_insight():
+    try:
+        user_ref = firestore_client.collection('users').document(request.user_id)
+        user_data = user_ref.get().to_dict()
+        dataset_name = user_data.get('updated_dataset') or user_data.get('dataset')
+        file_type = user_data.get('file_type', 'csv')
+        delimiter = ',' if file_type == 'csv' else '\t'
+
+        df = load_dataset(user_data['bucket'], dataset_name, delimiter=delimiter)
+
+        # Generate data summary components
+        describe = df.describe(include='all').to_dict()
+        correlation = df.corr(numeric_only=True).to_dict()
+        columns = df.columns.tolist()
+        preview = df.head(5).to_dict(orient='records')
+
+        # Prepare context strings
+        describe_str = json.dumps(describe, indent=2)
+        correlation_str = json.dumps(correlation, indent=2)
+        columns_str = ", ".join(columns)
+        preview_str = json.dumps(preview, indent=2)
+
+        # Updated prompt with full context
+        ai_prompt = (
+            f"Here is a summary of the dataset:\n\n"
+            f"Columns: {columns_str}\n\n"
+            f"First few rows:\n{preview_str}\n\n"
+            f"Describe statistics:\n{describe_str}\n\n"
+            f"Correlation matrix:\n{correlation_str}\n\n"
+            "Now, generate a concise natural language summary of this dataset. "
+            "Mention number of rows and columns, identify skewed or unusual distributions, "
+            "strong correlations (r > 0.75), and any interesting trends. "
+            "Make it helpful, friendly, and easy to understand."
+            "Make sure the title of your summary is 'BuffInsight' and it is in markdown format."
+            )
+
+        explanation = call_openrouter(
+            prompt=ai_prompt,
+            df=df,
+            mode="chat"  
+        )
+        
+        logger.info(f"Generated Insight: {explanation}")
+
+        return jsonify({
+            "summary_markdown": explanation
+        }), 200
+
+    except Exception as e:
+        print(f"Error in /buff-insight: {e}")
+        return jsonify({"message": f"Buff Insight failed: {str(e)}"}), 500
+
 @app.route('/transform', methods=['POST'])
 @token_required
 def transform_dataset():
@@ -910,6 +1093,7 @@ def transform_dataset():
         dataset_to_use = user_data.get('updated_dataset') or current_dataset
         delimiter = ',' if file_type == 'csv' else '\t'
         df = load_dataset(bucket_name, dataset_to_use, delimiter=delimiter)
+
         lower_cmd = command.lower()
 
         # Descriptive command handlers
@@ -935,11 +1119,11 @@ def transform_dataset():
             }), 200
         elif lower_cmd == "commands":
             return jsonify({"message": "Here are the commands you can use:\n\n"
-                                       "● remove column <column_name>\n"
-                                       "● rename column <old_name> to <new_name>\n"
-                                       "● filter rows where <condition>\n"
-                                       "● columns\n"
-                                       "● size\n"}), 200
+                                           "● remove column <column_name>\n"
+                                           "● rename column <old_name> to <new_name>\n"
+                                           "● filter rows where <condition>\n"
+                                           "● columns\n"
+                                           "● size\n"}), 200
 
         # Handle non-transformational queries (chat)
         if not is_likely_transformation(command):
@@ -998,37 +1182,28 @@ def transform_dataset():
         print("AI GENERATED CODE:\n", ai_code)
 
         if any(keyword in ai_code for keyword in ["plt.", "df.plot", "df.plot.", "df.plot(", "sns.", "sns.scatterplot", "sns.lineplot", "sns.barplot"]):
+        if any(keyword in ai_code for keyword in ["plt.", "df.plot", "df.plot.", "df.plot(", "sns.", "sns.scatterplot", "sns.lineplot", "sns.barplot"]):
             try:
                 local_vars = {'df': df.copy()}
                 exec(ai_code, {}, local_vars)
-
                 image_path = "/tmp/figure.png"
                 plt.savefig(image_path)
                 plt.close()
-
                 blob = storage_client.bucket(bucket_name).blob("figure.png")
                 blob.upload_from_filename(image_path)
                 image_url = blob.generate_signed_url(expiration=datetime.timedelta(hours=1))
-
-                # 🧠 Ask AI to describe the chart
-                plot_description_prompt = (
-                    f"This code creates a visualization using matplotlib:\n\n{ai_code}\n\n"
-                    "Please describe what this plot shows in 1-2 friendly and concise sentences, "
-                    "assuming the DataFrame variable is `df`. Don’t include the code, just a natural description."
-                )
+                plot_description_prompt = f"This code creates a visualization using matplotlib:\n\n{ai_code}\n\nPlease describe what this plot shows in 1-2 friendly and concise sentences, assuming the DataFrame variable is `df`. Don’t include the code, just a natural description."
                 chart_caption = call_openrouter(plot_description_prompt, df, mode="chat")
                 print("AI GENERATED CAPTION:\n", chart_caption)
-
                 return jsonify({
                     "message": chart_caption.strip() or "Here's your visualization 📊",
                     "image_url": image_url,
                     "generated_code": ai_code
                 }), 200
-
             except Exception as viz_err:
                 return jsonify({
-                    "message": f"Failed to generate visualization:\n\n{ai_code}\n\nError: {viz_err}"}
-                ), 500
+                    "message": f"Failed to generate visualization:\n\n{ai_code}\n\nError: {viz_err}"
+                }), 500
 
         if 'df =' in ai_code or 'df.' in ai_code or 'df[' in ai_code:
             try:
@@ -1036,21 +1211,26 @@ def transform_dataset():
                 exec(ai_code, {}, local_vars)
                 transformed_df = local_vars['df']
             except Exception as exec_err:
+                explanation_prompt = (
+                    f"The following Python code was generated for a user command:\n\n{ai_code}\n\n"
+                    f"But it raised this error:\n\n{str(exec_err)}\n\n"
+                    f"Can you explain in plain English what went wrong and how to fix it?"
+                )
+                explanation = call_openrouter(explanation_prompt, df=None, mode="chat")
                 return jsonify({
-                    "message": f"AI generated code, but it failed to execute:\n\n{ai_code}\n\nError: {exec_err}"
+                    "message": f"⚠️ AI-generated code failed to run.\n\nError: `{exec_err}`\n\n🤖 Here's what BuffBot thinks:\n\n{explanation.strip()}",
+                    "generated_code": ai_code
                 }), 500
 
             transformed_name = f"transformed_{current_dataset}"
             save_dataset(bucket_name, transformed_name, transformed_df)
             user_ref.update({'updated_dataset': transformed_name})
-
             blob = storage_client.get_bucket(bucket_name).blob(transformed_name)
             download_url = blob.generate_signed_url(expiration=datetime.timedelta(hours=1))
-
             return jsonify({
                 "message": "Transformation applied successfully ✅",
                 "download_url": download_url,
-                "generated_code": ai_code,  # 👈 Add this line
+                "generated_code": ai_code,
                 "followup_message": "Want to continue using this cleaned dataset? Reply with yes or no."
             }), 200
 
