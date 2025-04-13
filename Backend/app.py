@@ -173,6 +173,7 @@ def call_openrouter(prompt, df=None, mode="transform", history=None):
             "You're a data scientist. Return only executable pandas code to transform a DataFrame named df.\n"
             f"Here are the columns:\n{columns}\n\n"
             f"Here is a preview:\n{preview}"
+            "Do not include comments in your code"
         )
         user_prompt = f"Given this command: '{prompt}', write Python pandas code to perform this on a dataframe named df."
 
@@ -188,6 +189,7 @@ def call_openrouter(prompt, df=None, mode="transform", history=None):
             "and feel free to chat casually. Be helpful and conversational.\n"
             f"Here are the columns:\n{columns}\n\n"
             f"Here is a preview:\n{preview}"
+            "Whenever you recieve any error as prompt, briefly explain the error and provide a solution to fix it."
         )
         user_prompt = prompt
         
@@ -908,7 +910,7 @@ def transform_dataset():
         dataset_to_use = user_data.get('updated_dataset') or current_dataset
         delimiter = ',' if file_type == 'csv' else '\t'
         df = load_dataset(bucket_name, dataset_to_use, delimiter=delimiter)
-            
+
         lower_cmd = command.lower()
 
         # Descriptive command handlers
@@ -934,32 +936,20 @@ def transform_dataset():
             }), 200
         elif lower_cmd == "commands":
             return jsonify({"message": "Here are the commands you can use:\n\n"
-                                       "● remove column <column_name>\n"
-                                       "● rename column <old_name> to <new_name>\n"
-                                       "● filter rows where <condition>\n"
-                                       "● columns\n"
-                                       "● size\n"}), 200
+                                           "● remove column <column_name>\n"
+                                           "● rename column <old_name> to <new_name>\n"
+                                           "● filter rows where <condition>\n"
+                                           "● columns\n"
+                                           "● size\n"}), 200
 
         # Handle non-transformational queries (chat)
         if not is_likely_transformation(command):
-            # Get recent chat history
             history_ref = firestore_client.collection("users").document(user_id).collection("chat_history")
             recent_messages = history_ref.order_by("timestamp", direction=firestore.Query.DESCENDING).limit(5).stream()
-
-            history = []
-            for doc in reversed(list(recent_messages)):
-                entry = doc.to_dict()
-                history.append({"role": entry["role"], "content": entry["content"]})
-
-            # Append current user prompt
+            history = [{"role": doc.to_dict()["role"], "content": doc.to_dict()["content"]} for doc in reversed(list(recent_messages))]
             history.append({"role": "user", "content": command})
 
-            # Call OpenRouter with full context
             ai_response = call_openrouter(command, df=df, mode="chat", history=history)
-
-            # Save the AI's reply and user prompt
-            # append_to_chat_history(user_id, "user", command)
-            # append_to_chat_history(user_id, "assistant", ai_response.strip())
             stripped = ai_response.strip()
             if any(stripped.startswith(p) for p in ['df.', 'df.describe', 'df.shape']):
                 try:
@@ -973,26 +963,13 @@ def transform_dataset():
             return jsonify({"message": ai_response}), 200
 
         # === AI Transformation Code ===
-        # Get recent chat history
         history_ref = firestore_client.collection("users").document(user_id).collection("chat_history")
         recent_messages = history_ref.order_by("timestamp", direction=firestore.Query.DESCENDING).limit(5).stream()
-
-        history = []
-        for doc in reversed(list(recent_messages)):
-            entry = doc.to_dict()
-            history.append({"role": entry["role"], "content": entry["content"]})
-
-        # Append current user prompt
+        history = [{"role": doc.to_dict()["role"], "content": doc.to_dict()["content"]} for doc in reversed(list(recent_messages))]
         history.append({"role": "user", "content": command})
 
-        # Call OpenRouter with full context
         ai_code = call_openrouter(command, df=df, mode="transform", history=history)
         ai_code = clean_ai_code(ai_code)
-        # ai_code = detect_undefined_names(ai_code)
-
-        # Save the AI's reply and user prompt
-        # append_to_chat_history(user_id, "user", command)
-        # append_to_chat_history(user_id, "assistant", ai_code.strip())
         ai_code = ai_code.replace("plt.show()", "")
         print("AI GENERATED CODE:\n", ai_code)
 
@@ -1000,34 +977,24 @@ def transform_dataset():
             try:
                 local_vars = {'df': df.copy()}
                 exec(ai_code, {}, local_vars)
-
                 image_path = "/tmp/figure.png"
                 plt.savefig(image_path)
                 plt.close()
-
                 blob = storage_client.bucket(bucket_name).blob("figure.png")
                 blob.upload_from_filename(image_path)
                 image_url = blob.generate_signed_url(expiration=datetime.timedelta(hours=1))
-
-                # 🧠 Ask AI to describe the chart
-                plot_description_prompt = (
-                    f"This code creates a visualization using matplotlib:\n\n{ai_code}\n\n"
-                    "Please describe what this plot shows in 1-2 friendly and concise sentences, "
-                    "assuming the DataFrame variable is `df`. Don’t include the code, just a natural description."
-                )
+                plot_description_prompt = f"This code creates a visualization using matplotlib:\n\n{ai_code}\n\nPlease describe what this plot shows in 1-2 friendly and concise sentences, assuming the DataFrame variable is `df`. Don’t include the code, just a natural description."
                 chart_caption = call_openrouter(plot_description_prompt, df, mode="chat")
                 print("AI GENERATED CAPTION:\n", chart_caption)
-
                 return jsonify({
                     "message": chart_caption.strip() or "Here's your visualization 📊",
                     "image_url": image_url,
                     "generated_code": ai_code
                 }), 200
-
             except Exception as viz_err:
                 return jsonify({
-                    "message": f"Failed to generate visualization:\n\n{ai_code}\n\nError: {viz_err}"}
-                ), 500
+                    "message": f"Failed to generate visualization:\n\n{ai_code}\n\nError: {viz_err}"
+                }), 500
 
         if 'df =' in ai_code or 'df.' in ai_code or 'df[' in ai_code:
             try:
@@ -1035,21 +1002,26 @@ def transform_dataset():
                 exec(ai_code, {}, local_vars)
                 transformed_df = local_vars['df']
             except Exception as exec_err:
+                explanation_prompt = (
+                    f"The following Python code was generated for a user command:\n\n{ai_code}\n\n"
+                    f"But it raised this error:\n\n{str(exec_err)}\n\n"
+                    f"Can you explain in plain English what went wrong and how to fix it?"
+                )
+                explanation = call_openrouter(explanation_prompt, df=None, mode="chat")
                 return jsonify({
-                    "message": f"AI generated code, but it failed to execute:\n\n{ai_code}\n\nError: {exec_err}"
+                    "message": f"⚠️ AI-generated code failed to run.\n\nError: `{exec_err}`\n\n🤖 Here's what BuffBot thinks:\n\n{explanation.strip()}",
+                    "generated_code": ai_code
                 }), 500
 
             transformed_name = f"transformed_{current_dataset}"
             save_dataset(bucket_name, transformed_name, transformed_df)
             user_ref.update({'updated_dataset': transformed_name})
-
             blob = storage_client.get_bucket(bucket_name).blob(transformed_name)
             download_url = blob.generate_signed_url(expiration=datetime.timedelta(hours=1))
-
             return jsonify({
                 "message": "Transformation applied successfully ✅",
                 "download_url": download_url,
-                "generated_code": ai_code,  # 👈 Add this line
+                "generated_code": ai_code,
                 "followup_message": "Want to continue using this cleaned dataset? Reply with yes or no."
             }), 200
 
@@ -1061,6 +1033,7 @@ def transform_dataset():
     except Exception as e:
         print(f"Error in transform_dataset: {e}")
         return jsonify({"message": f"Error: {str(e)}"}), 500
+
 
 @app.route('/chat-history', methods=['GET'])
 @token_required
