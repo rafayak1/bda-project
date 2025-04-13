@@ -1,22 +1,9 @@
-# apiVersion: v1
-# kind: Service
-# metadata:
-#   name: vite-service
-# spec:
-#   type: LoadBalancer
-#   selector:
-#     app: vite-frontend
-#   ports:
-#     - port: 80
-#       targetPort: 80
-
 apiVersion: v1
 kind: Service
 metadata:
   name: vite-service
 spec:
   type: LoadBalancer
-  loadBalancerIP: 34.133.49.171  # Replace this
   selector:
     app: vite-frontend
   ports:

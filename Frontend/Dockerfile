@@ -12,8 +12,7 @@ RUN npm install
 COPY . .
 
 # Build the Vite app
-RUN npm run build  
-# This should create the 'dist' directory
+RUN npm run build  # This should create the 'dist' directory
 
 # Serve step using Nginx
 FROM nginx:alpine

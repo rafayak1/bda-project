@@ -7,7 +7,7 @@ import { app } from './firebase'; // Ensure firebase.js is properly set up
 //import axios from 'axios';
 import  axiosInstance from '../pages/axiosConfig';
 import { useNavigate } from 'react-router-dom';
- // Adjust this based on your backend deployment
+const API_BASE_URL = 'http://localhost:5000'; // Adjust this based on your backend deployment
 
 
   // const navigate = useNavigate();

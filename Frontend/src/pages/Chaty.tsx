@@ -31,15 +31,6 @@ interface Window {
   SpeechRecognition: any;
 
 }
-import { Select, MenuItem, InputLabel, FormControl } from '@mui/material'; 
-import Lottie from "lottie-react";
-import typingAnimation from "../assets/ai-typing.json";
-
-interface Window {
-  webkitSpeechRecognition: any;
-  SpeechRecognition: any;
-
-}
 
 // Styled components with updated color scheme
 const ChatContainer = styled(Paper)(({ theme }) => ({
@@ -957,12 +948,12 @@ const handlePreviewDataset = async () => {
                 </Box>
               </Box>
   
-              <MessagesContainer sx={{ display: 'flex', flexDirection: 'column' }}>
-  {messages.map((msg) => (
-    <Box
-      key={msg.id}
-      sx={{ display: 'flex', justifyContent: msg.isUser ? 'flex-end' : 'flex-start' }}
-    >
+              <MessagesContainer sx={{ display: 'flex', flexDirection: 'column-reverse' }}>
+              {[...messages].reverse().map((msg) => (
+  <Box
+    key={msg.id}
+    sx={{ display: 'flex', justifyContent: msg.isUser ? 'flex-end' : 'flex-start' }}
+  >
       <MessageBubble isUser={msg.isUser}>
         {msg.isLoading ? (
           <Lottie
