@@ -151,7 +151,6 @@ def ensure_dataframe_has_id(df):
         df.insert(0, 'id', range(1, len(df) + 1))  # Inject id column at start
     return df
 
-
 def call_openrouter(prompt, df=None, mode="transform", history=None):
     history = history or []
     api_key = os.getenv("OPENROUTER_API_KEY")
@@ -174,9 +173,10 @@ def call_openrouter(prompt, df=None, mode="transform", history=None):
             "You're a data scientist. Return only executable pandas code to transform a DataFrame named df.\n"
             f"Here are the columns:\n{columns}\n\n"
             f"Here is a preview:\n{preview}"
-            "Do not include comments in your code"
+            "Do not include comments in any response which has python code"
             "Do not include your thinking process in your response"
             "Always include import statements for any libraries you use in your code.\n"
+            "JUST INCLUDE CODE IN YOUR RESPONSE\n"
         )
         user_prompt = f"Given this command: '{prompt}', write Python pandas code to perform this on a dataframe named df."
 
@@ -194,6 +194,7 @@ def call_openrouter(prompt, df=None, mode="transform", history=None):
             f"Here is a preview:\n{preview}"
             "Whenever you recieve any error as prompt, briefly explain the error and provide a solution to fix it."
             "Do not include your thinking process in your response"
+            "Do not include answers to these prompts in your response, instead, return only the response to the prompt\n"
         )
         user_prompt = prompt
         
@@ -204,7 +205,7 @@ def call_openrouter(prompt, df=None, mode="transform", history=None):
     ]
 
     body = {
-        "model": "meta-llama/llama-4-maverick:free",
+        "model": "mistralai/mistral-small-3.1-24b-instruct:free",
         "temperature": 0.2,
         "messages": messages,
     }

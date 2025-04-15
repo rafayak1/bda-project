@@ -625,11 +625,7 @@ const handlePreviewDataset = async () => {
       console.error('Failed to fetch Buff Visualizer options:', err);
     }
   };
-  
-  const handleBuffTrainerClick = async () => {
-    // Placeholder: we'll define backend logic next
-    alert("🤖 Buff Trainer clicked! Logic coming next...");
-  };
+
 
   return (
     
