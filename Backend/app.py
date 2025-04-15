@@ -17,7 +17,6 @@ import requests
 import re
 import matplotlib
 matplotlib.use('Agg')  
-
 import matplotlib.pyplot as plt  
 from io import StringIO
 import sys
@@ -34,6 +33,7 @@ import ast
 app = Flask(__name__)
 
 CORS(app, supports_credentials=True, origins=[
+    "http://localhost:5173",
     "http://34.68.101.174", 
     "http://34.133.49.171",
     "https://vite-app-208526089481.us-central1.run.app"
@@ -175,6 +175,7 @@ def call_openrouter(prompt, df=None, mode="transform", history=None):
             f"Here are the columns:\n{columns}\n\n"
             f"Here is a preview:\n{preview}"
             "Do not include comments in your code"
+            "Do not include your thinking process in your response"
         )
         user_prompt = f"Given this command: '{prompt}', write Python pandas code to perform this on a dataframe named df."
 
@@ -191,6 +192,7 @@ def call_openrouter(prompt, df=None, mode="transform", history=None):
             f"Here are the columns:\n{columns}\n\n"
             f"Here is a preview:\n{preview}"
             "Whenever you recieve any error as prompt, briefly explain the error and provide a solution to fix it."
+            "Do not include your thinking process in your response"
         )
         user_prompt = prompt
         
@@ -201,7 +203,7 @@ def call_openrouter(prompt, df=None, mode="transform", history=None):
     ]
 
     body = {
-        "model": "openrouter/optimus-alpha",
+        "model": "meta-llama/llama-4-maverick:free",
         "temperature": 0.2,
         "messages": messages,
     }
@@ -1270,4 +1272,6 @@ def preview_dataset():
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    # app.run(host="0.0.0.0", port=5002, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)

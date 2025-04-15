@@ -37,7 +37,7 @@ const CodeExecutor = ({ code, setCode }: { code: string, setCode: React.Dispatch
 
   return (
     <Box sx={{ mt: 4 }}>
-      <Typography variant="h6" sx={{ color: 'white' }}>💻 Custom Python Cell</Typography>
+      <Typography variant="h6" sx={{ color: 'white' }}>💻 Buff Coder</Typography>
       <Editor
   height="200px"
   defaultLanguage="python"
