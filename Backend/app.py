@@ -34,10 +34,9 @@ import ast
 app = Flask(__name__)
 
 CORS(app, supports_credentials=True, origins=[
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
     "http://34.68.101.174", 
     "http://34.133.49.171",
+    "https://vite-app-208526089481.us-central1.run.app"
 ])
 # CORS(app, supports_credentials=True, resources={r"/signup": {"origins": "http://localhost:5173"}})
 # CORS(app, supports_credentials=True, resources={r"/login": {"origins": "http://localhost:5173"}})
