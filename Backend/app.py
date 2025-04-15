@@ -135,7 +135,7 @@ def is_likely_transformation(prompt: str):
                 'head', 'tail', 'info', 'value_counts', 'unique', 'isna', 'notna',
                 'astype', 'to_datetime', 'to_numeric', 'to_string', 'to_csv', 'to_excel', 'to_json',
                 'to_html', 'to_sql', 'to_dict', 'to_clipboard', 'to_feather', 'to_parquet', 'column', 
-                'filter', 'remove', 'add', 'insert', 'update', 'change', 'modify', 'transform', 'create', 'rename', 'prepare']
+                'filter', 'remove', 'add', 'insert', 'update', 'change', 'modify', 'transform', 'create', 'rename', 'prepare', "plot", "visualize", "graph", "chart", "histogram", "scatter", "bar", "line", "pie", "boxplot", "heatmap"]
     return any(kw in prompt.lower() for kw in keywords)
 
 def format_code(code: str):
@@ -176,6 +176,7 @@ def call_openrouter(prompt, df=None, mode="transform", history=None):
             f"Here is a preview:\n{preview}"
             "Do not include comments in your code"
             "Do not include your thinking process in your response"
+            "Always include import statements for any libraries you use in your code.\n"
         )
         user_prompt = f"Given this command: '{prompt}', write Python pandas code to perform this on a dataframe named df."
 
@@ -444,30 +445,40 @@ def upload_dataset():
         blob.upload_from_file(file)
         print(f"Uploaded file: {filename}")
 
-        # Handle CSV-specific validation
         if filename.lower().endswith('.csv'):
             file_path = f"/tmp/{filename}"
             blob.download_to_filename(file_path)
+            print(f"[DEBUG] File downloaded to {file_path}")
             try:
-                pd.read_csv(file_path, nrows=5)  # validate structure
-                user_ref.update({
-                    'dataset': filename,
-                    'file_type': 'csv',
-                    'updated_dataset': None  # Clear transformed version
-                })
-            except Exception as e:
-                return jsonify({"message": f"File uploaded, but CSV validation failed: {str(e)}"}), 400
+                # Try reading as UTF-8 first
+                df_preview = pd.read_csv(file_path, nrows=5)
+                print(f"[DEBUG] CSV loaded with UTF-8")
+            except UnicodeDecodeError:
+                print(f"[WARN] UTF-8 failed. Retrying with ISO-8859-1...")
+                try:
+                    df_preview = pd.read_csv(file_path, nrows=5, encoding='ISO-8859-1')
+                    print(f"[DEBUG] CSV loaded with ISO-8859-1")
+                except Exception as e:
+                    print(f"[ERROR] CSV Validation Failed after fallback: {e}")
+                    return jsonify({"message": f"File uploaded, but CSV validation failed: {str(e)}"}), 400
+
+            print(f"[DEBUG] CSV Preview:\n{df_preview}")
+            user_ref.update({
+                'dataset': filename,
+                'file_type': 'csv',
+                'updated_dataset': None
+            })
         else:
             user_ref.update({
-            'dataset': filename,
-            'file_type': 'other',
-            'updated_dataset': None  # Clear transformed version
-        })
+                'dataset': filename,
+                'file_type': 'other',
+                'updated_dataset': None
+            })
 
         return jsonify({"message": "File uploaded successfully", "filename": filename}), 201
 
     except Exception as e:
-        print(f"Error uploading file: {e}")
+        print(f"[ERROR] Upload failed: {e}")
         return jsonify({"message": f"Failed to upload file: {str(e)}"}), 500
     
 
@@ -972,6 +983,7 @@ def transform_dataset():
         history.append({"role": "user", "content": command})
 
         ai_code = call_openrouter(command, df=df, mode="transform", history=history)
+        print("AI Code:\n", ai_code)
         ai_code = clean_ai_code(ai_code)
         ai_code = ai_code.replace("plt.show()", "")
         print("AI GENERATED CODE:\n", ai_code)
@@ -1237,7 +1249,16 @@ def load_dataset(bucket_name, dataset_name, delimiter=','):
     blob = bucket.blob(dataset_name)
     file_path = f"/tmp/{dataset_name}"
     blob.download_to_filename(file_path)
-    return pd.read_csv(file_path, delimiter=delimiter)
+    print(f"[DEBUG] Downloaded {dataset_name} to {file_path}")
+
+    try:
+        df = pd.read_csv(file_path, delimiter=delimiter)
+    except UnicodeDecodeError:
+        print("[WARN] UTF-8 failed in load_dataset. Retrying with ISO-8859-1...")
+        df = pd.read_csv(file_path, delimiter=delimiter, encoding='ISO-8859-1')
+        print("[DEBUG] CSV loaded with ISO-8859-1")
+
+    return df
 
 def save_dataset(bucket_name, dataset_name, dataframe):
     bucket = storage_client.bucket(bucket_name)
@@ -1260,7 +1281,18 @@ def preview_dataset():
         file_type = user_data.get('file_type', 'csv')
         delimiter = ',' if file_type == 'csv' else '\t'
 
-        df = load_dataset(user_data['bucket'], dataset_name, delimiter=delimiter)
+        # Download the file locally
+        bucket = storage_client.bucket(user_data['bucket'])
+        blob = bucket.blob(dataset_name)
+        file_path = f"/tmp/{dataset_name}"
+        blob.download_to_filename(file_path)
+
+        try:
+            df = pd.read_csv(file_path, delimiter=delimiter)
+        except UnicodeDecodeError:
+            print("[WARN] UTF-8 failed for preview. Retrying with ISO-8859-1...")
+            df = pd.read_csv(file_path, delimiter=delimiter, encoding='ISO-8859-1')
+
         df = ensure_dataframe_has_id(df)
         preview_data = df.head(100)
         return jsonify({

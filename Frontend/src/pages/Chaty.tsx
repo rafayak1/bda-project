@@ -396,6 +396,9 @@ const handleSendMessage = async () => {
         isUser: false,
         timestamp: new Date(),
         imageUrl: image_url,
+        isFile: true,
+        fileName: 'Download Visualization',
+        downloadUrl: image_url, 
       });
     }
 
@@ -955,35 +958,46 @@ const handlePreviewDataset = async () => {
     sx={{ display: 'flex', justifyContent: msg.isUser ? 'flex-end' : 'flex-start' }}
   >
       <MessageBubble isUser={msg.isUser}>
-        {msg.isLoading ? (
-          <Lottie
-            animationData={typingAnimation}
-            loop
-            style={{ width: 100, height: 100 }}
-          />
-        ) : msg.downloadUrl ? (
-          <Button
-            variant="outlined"
-            href={msg.downloadUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            sx={{
-              color: '#fff',
-              borderColor: '#9333ea',
-              '&:hover': {
-                borderColor: '#ec4899',
-                background: 'rgba(255, 255, 255, 0.1)',
-              },
-            }}
-          >
-            {msg.fileLabel || "Download Transformed Dataset"}
-          </Button>
-        ) : msg.imageUrl ? (
-          <img
-            src={msg.imageUrl}
-            alt="Generated Visualization"
-            style={{ maxWidth: '100%' }}
-          />
+      {msg.isLoading ? (
+  <Lottie
+    animationData={typingAnimation}
+    loop
+    style={{ width: 100, height: 100 }}
+  />
+) : msg.imageUrl ? (
+  <Box>
+    <img
+      src={msg.imageUrl}
+      alt="Generated Visualization"
+      style={{ maxWidth: '100%', borderRadius: 8 }}
+    />
+    {msg.downloadUrl && (
+      <a
+        href={msg.downloadUrl}
+        download
+        style={{ textDecoration: 'none', display: 'inline-block', marginTop: 8 }}
+      >
+        <Button variant="outlined" size="small">📥 Download Image</Button>
+      </a>
+    )}
+  </Box>
+) : msg.downloadUrl ? (
+  <Button
+    variant="outlined"
+    href={msg.downloadUrl}
+    target="_blank"
+    rel="noopener noreferrer"
+    sx={{
+      color: '#fff',
+      borderColor: '#9333ea',
+      '&:hover': {
+        borderColor: '#ec4899',
+        background: 'rgba(255, 255, 255, 0.1)',
+      },
+    }}
+  >
+    {msg.fileLabel || "Download Transformed Dataset"}
+  </Button>
         ) : msg.tableData ? (
           <Box sx={{ mt: 1 }}>
             <TableContainer component={Paper} sx={{ backgroundColor: '#121212' }}>
