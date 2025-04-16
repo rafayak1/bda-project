@@ -32,7 +32,6 @@ interface Window {
 
 }
 
-// Styled components with updated color scheme
 const ChatContainer = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(3),
   borderRadius: 16,
@@ -47,7 +46,7 @@ const MessagesContainer = styled(Box)(({ theme }) => ({
   height: '400px',
   overflowY: 'auto',
   display: 'flex',
-  flexDirection: 'column-reverse', // 👈 this is key
+  flexDirection: 'column-reverse', 
   border: '1px solid rgba(75, 85, 99, 0.3)',
   padding: theme.spacing(2),
   marginBottom: theme.spacing(2),
@@ -108,18 +107,6 @@ const GradientButton = styled(Button)(({ theme }) => ({
   borderRadius: '8px',
 }));
 
-// const UploadButton = styled(Button)(({ theme }) => ({
-//   background: 'linear-gradient(to right, #4f46e5, #9333ea)',
-//   color: 'white',
-//   fontWeight: 'bold',
-//   '&:hover': {
-//     background: 'linear-gradient(to right, #4338ca, #7e22ce)',
-//   },
-//   padding: '10px 20px',
-//   borderRadius: '8px',
-//   marginBottom: theme.spacing(2),
-// }));
-
 const ActionButton = styled(Button)(({ theme }) => ({
   background: 'linear-gradient(to right, #4f46e5, #9333ea, #ec4899)',
   color: 'white',
@@ -150,11 +137,7 @@ interface Message {
 }
 
 const Chatx: React.FC = () => {
-  // Replace this line
-  // const [user] = useAuthState(auth);
-  // With this
-  const user = null; // Mock user state
-
+  const user = null; 
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
@@ -179,7 +162,6 @@ const Chatx: React.FC = () => {
   const [xAxis, setXAxis] = useState("");
   const [yAxis, setYAxis] = useState("");
   const [submittingBuffVisualizer, setSubmittingBuffVisualizer] = useState(false);
-  // BuffTrainer-related state
   const [trainerDialogOpen, setTrainerDialogOpen] = useState(false);
   const [trainerColumns, setTrainerColumns] = useState<string[]>([]);
   const [numericColumns, setNumericColumns] = useState<string[]>([]);
@@ -193,11 +175,6 @@ const Chatx: React.FC = () => {
   const [buffInsightLoading, setBuffInsightLoading] = useState(false);
   const [buffInsightMarkdown, setBuffInsightMarkdown] = useState('');
 
-  // // Scroll to bottom when messages change
-  // useEffect(() => {
-  //   messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  // }, [messages]);
-
   useEffect(() => {
     checkDatasetStatus();
   }, []);
@@ -210,11 +187,9 @@ useEffect(() => {
   const token = localStorage.getItem('token');
   setIsLoggedIn(!!token);
 }, []);
-// Enable support for webkitSpeechRecognition
 
 const loadChatHistory = async () => {
   try {
-    // Fetch history and dataset status
     const [historyRes, statusRes] = await Promise.all([
       axiosInstance.get('/chat-history', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
@@ -339,7 +314,6 @@ const handleSendMessage = async () => {
   setIsLoading(true);
 
   try {
-    // Save user message to chat history
     await axiosInstance.post(
       '/chat-history',
       { role: 'user', content: message },
@@ -381,7 +355,6 @@ const handleSendMessage = async () => {
       };
       messagesToAdd.push(botMsg);
 
-      // Save bot message to chat history
       await axiosInstance.post(
         '/chat-history',
         { role: 'assistant', content: botText },
@@ -433,7 +406,6 @@ const handleSendMessage = async () => {
       };
       messagesToAdd.push(followupMsg);
 
-      // Save follow-up to chat history
       await axiosInstance.post(
         '/chat-history',
         { role: 'assistant', content: followup_message },
@@ -489,7 +461,7 @@ const handlePreviewDataset = async () => {
   }
     const files = event.target.files;
     if (files && files.length > 0) {
-      const file = files[0]; // only support 1 file at a time
+      const file = files[0]; 
       setUploadedFiles((prev) => [...prev, file]);
   
       const fileMessage: Message = {
@@ -527,7 +499,6 @@ const handlePreviewDataset = async () => {
       }
       setHasUploaded(true);
   
-      // allow re-upload of same file
       event.target.value = '';
     }
   };
@@ -541,7 +512,7 @@ const handlePreviewDataset = async () => {
   const handleLogout = async () => {
     try {
       localStorage.removeItem('token');
-      navigate('/login'); // Redirect to login page after logout
+      navigate('/login'); 
     } catch (error) {
       console.error('Logout failed:', error);
     }
@@ -554,7 +525,7 @@ const handlePreviewDataset = async () => {
   
       const response = await axiosInstance.post(
         '/buff-clean',
-        {}, // You can later add column/strategy config here
+        {}, 
         {
           headers: { Authorization: `Bearer ${token}` },
           withCredentials: true,
@@ -629,7 +600,6 @@ const handlePreviewDataset = async () => {
 
   return (
     
-    // 1) Top-level Box to ensure the entire background is black:
     <Box 
       sx={{ 
         backgroundColor: 'black', 
@@ -639,7 +609,6 @@ const handlePreviewDataset = async () => {
       }}
     >
       <GlobalStyles />
-      {/* Navigation */}
       <motion.nav 
         initial={{ y: -100 }}
         animate={{ y: 0 }}
@@ -676,9 +645,7 @@ const handlePreviewDataset = async () => {
         </div>
       </motion.nav>
   
-      {/* 2) Flex container for sidebar & main content */}
       <Box sx={{ display: 'flex', pt: 0 }}>
-        {/* Left Vertical Button Bar */}
         <Box
   sx={{
     width: 100,
@@ -687,8 +654,8 @@ const handlePreviewDataset = async () => {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'center', // centers vertically
-    gap: 4, // more spacing between buttons
+    justifyContent: 'center', 
+    gap: 4, 
     position: 'fixed',
     top: 64,
     left: 0,
@@ -825,7 +792,6 @@ const handlePreviewDataset = async () => {
     onClick={async () => {
       const loadingMsgId = uuid();
     
-      // Add temporary animation message to chat
       setMessages((prev) => [
         ...prev,
         {
@@ -850,7 +816,6 @@ const handlePreviewDataset = async () => {
           timestamp: new Date(),
         };
     
-        // Replace loading animation with real summary
         setMessages((prev) =>
           prev
             .filter((msg) => msg.id !== loadingMsgId)
@@ -876,10 +841,7 @@ const handlePreviewDataset = async () => {
 </Tooltip>
         </Box>
   
-        {/* 3) Main Content – shifted to the right so the sidebar doesn't overlap */}
         <Box sx={{ flexGrow: 1, ml: '80px' }}>
-          {/* 4) Use a Container if you still want a narrower center column. 
-              If you want it to fill the whole screen, remove maxWidth or set maxWidth={false}. */}
           <Container maxWidth="md" sx={{ pt: 12, pb: 4 }}>
             <Box sx={{ textAlign: 'center', mb: 4 }}>
               <Typography 
@@ -1083,7 +1045,6 @@ const handlePreviewDataset = async () => {
         </Box>
       </Box>
   
-      {/* Dialogs */}
       <Dialog
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}

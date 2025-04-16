@@ -1,4 +1,3 @@
-// firebase.js
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 
@@ -12,11 +11,9 @@ const firebaseConfig = {
     measurementId: "Your Key"
   };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
-// Mock Firebase implementation
 export const mockAuth = {
   currentUser: null,
   onAuthStateChanged: (callback) => {

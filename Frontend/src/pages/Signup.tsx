@@ -3,14 +3,12 @@ import { Link } from 'react-router-dom';
 import { Eye, EyeOff, UserPlus } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { app } from './firebase'; // Ensure firebase.js is properly set up
-//import axios from 'axios';
+import { app } from './firebase'; 
 import  axiosInstance from '../pages/axiosConfig';
 import { useNavigate } from 'react-router-dom';
-const API_BASE_URL = 'http://localhost:5000'; // Adjust this based on your backend deployment
+const API_BASE_URL = 'http://localhost:5000'; 
 
 
-  // const navigate = useNavigate();
 function Signup() {
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -87,7 +85,6 @@ function Signup() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    // Clear error when user starts typing
     if (errors[name as keyof typeof errors]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
@@ -97,25 +94,22 @@ function Signup() {
   const provider = new GoogleAuthProvider();
 
   const handleGoogleSignup = async () => {
-    console.log('Google SignUp Clicked!'); // Debugging log
+    console.log('Google SignUp Clicked!'); 
     try {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
   
       console.log('Google Signup Success:', user);
-  
-      // Send user data to backend
       const response = await axiosInstance.post('/google-signup', {
         name: user.displayName,
         email: user.email,
-        uid: user.uid, // or token: await user.getIdToken() if your backend verifies Firebase tokens
+        uid: user.uid, 
       });
   
       const token = response.data.token;
       localStorage.setItem('token', token);
       console.log('Google Signup Backend Success:', response.data);
   
-      // navigate('/dashboard'); // if needed
     } catch (error) {
       if (error instanceof Error) {
         console.error('Google Signup Error:', error.message);

@@ -8,7 +8,6 @@ function Navbar() {
 
   return (
     <div className="">
-      {/* Navigation */}
       <motion.nav 
         initial={{ y: -100 }}
         animate={{ y: 0 }}

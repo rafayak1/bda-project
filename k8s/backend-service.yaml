@@ -6,7 +6,7 @@ metadata:
     cloud.google.com/load-balancer-type: "External"
 spec:
   type: LoadBalancer
-  loadBalancerIP: 35.188.83.222  # 👈 Reserved static IP
+  loadBalancerIP: 35.188.83.222  
   selector:
     app: flask-backend
   ports:

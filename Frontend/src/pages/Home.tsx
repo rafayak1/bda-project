@@ -57,10 +57,8 @@ function Home() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Navigation */}
       <Navbar/>
 
-      {/* Hero Section */}
       <div className="relative bg-black overflow-hidden pt-16">
         <div className="max-w-7xl mx-auto">
           <div className="relative z-10 pb-8 bg-black sm:pb-16 md:pb-20 lg:pb-28 xl:pb-32">
@@ -136,7 +134,6 @@ function Home() {
         </div>
       </div>
 
-      {/* Features Section */}
       <div id="features" className="py-12 bg-gray-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div 
@@ -205,7 +202,6 @@ function Home() {
         </div>
       </div>
 
-      {/* How it Works Section */}
       <div id="how-it-works" className="py-16 bg-black">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div 
@@ -249,7 +245,6 @@ function Home() {
         </div>
       </div>
 
-      {/* Footer */}
       <footer className="bg-gray-900">
         <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center">

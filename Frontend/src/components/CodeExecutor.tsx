@@ -22,7 +22,7 @@ const CodeExecutor = ({ code, setCode }: { code: string, setCode: React.Dispatch
       });
       setOutput(res.data.message || '');
       setTable(res.data.table || null);
-      setImage(res.data.image_url || null); // 👈 set the image here
+      setImage(res.data.image_url || null); 
       if (res.data.generated_code) {
         setCode(res.data.generated_code);
       }
@@ -31,7 +31,7 @@ const CodeExecutor = ({ code, setCode }: { code: string, setCode: React.Dispatch
       setError(err?.response?.data?.message || 'Execution failed');
       setOutput('');
       setTable(null);
-      setImage(null); // clear old image if there's an error
+      setImage(null); 
     }
   };
 
@@ -49,21 +49,18 @@ const CodeExecutor = ({ code, setCode }: { code: string, setCode: React.Dispatch
         Run
       </Button>
   
-      {/* Output from print() or final expression */}
       {output && (
         <Paper sx={{ mt: 2, p: 2, backgroundColor: '#111', color: 'lime' }}>
           <pre>{output}</pre>
         </Paper>
       )}
   
-      {/* Error block */}
       {error && (
         <Paper sx={{ mt: 2, p: 2, backgroundColor: '#330000', color: 'red' }}>
           <pre>{error}</pre>
         </Paper>
       )}
   
-      {/* DataFrame table preview */}
       {table && (
         <Box sx={{ mt: 2 }}>
           <Typography variant="subtitle1" sx={{ color: 'white', mb: 1 }}>📊 Result Preview</Typography>
@@ -94,7 +91,6 @@ const CodeExecutor = ({ code, setCode }: { code: string, setCode: React.Dispatch
         </Box>
       )}
   
-      {/* Matplotlib image preview */}
       {image && (
         <Box sx={{ mt: 2 }}>
           <Typography variant="subtitle1" sx={{ color: 'white', mb: 1 }}>

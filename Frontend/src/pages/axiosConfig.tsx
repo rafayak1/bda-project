@@ -1,4 +1,3 @@
-// axiosConfig.tsx
 import axios, { AxiosRequestConfig, AxiosInstance } from 'axios';
 
 const axiosInstance: AxiosInstance = axios.create({
@@ -10,17 +9,16 @@ const axiosInstance: AxiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use(
   (config: AxiosRequestConfig) => {
-    const token = localStorage.getItem('token'); // Fetch token from localStorage
+    const token = localStorage.getItem('token'); 
     if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`; // Attach token to Authorization header
+      config.headers['Authorization'] = `Bearer ${token}`; 
     }
     return config;
   },
   (error) => {
-    return Promise.reject(error); // Handle errors
+    return Promise.reject(error); 
   }
 );
 
-// Make sure you are default exporting the axiosInstance
 export default axiosInstance;
 

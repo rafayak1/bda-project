@@ -29,7 +29,6 @@ import ast
 
 
 
-# Initialize Flask app
 app = Flask(__name__)
 
 CORS(app, supports_credentials=True, origins=[
@@ -38,14 +37,6 @@ CORS(app, supports_credentials=True, origins=[
     "http://34.133.49.171",
     "https://vite-app-208526089481.us-central1.run.app"
 ])
-# CORS(app, supports_credentials=True, resources={r"/signup": {"origins": "http://localhost:5173"}})
-# CORS(app, supports_credentials=True, resources={r"/login": {"origins": "http://localhost:5173"}})
-# CORS(app, supports_credentials=True, resources={r"/forgot-password": {"origins": "http://localhost:5173"}})
-# CORS(app, supports_credentials=True, resources={r"/reset-password": {"origins": "http://localhost:5173"}})
-# CORS(app, supports_credentials=True, resources={r"/upload": {"origins": "http://localhost:5173"}})
-# CORS(app, supports_credentials=True, resources={r"/transform": {"origins": "http://localhost:5173"}})
-# CORS(app, supports_credentials=True, resources={r"/dataset-status": {"origins": "http://localhost:5173"}})
-# CORS(app, supports_credentials=True, resources={r"/preview": {"origins": "http://localhost:5173"}})
 
 load_dotenv()
 app.secret_key = os.getenv("SECRET_KEY")
@@ -79,7 +70,7 @@ def append_to_chat_history(user_id, role, content):
     """Store the latest chat message in Firestore."""
     chat_ref = firestore_client.collection("users").document(user_id).collection("chat_history")
     chat_ref.add({
-        "role": role,  # 'user' or 'assistant'
+        "role": role, 
         "content": content,
         "timestamp": datetime.datetime.utcnow()
     })
@@ -110,19 +101,15 @@ def detect_undefined_names(code):
         os.unlink(temp_path)
 
 def clean_ai_code(raw_code: str):
-    # Remove markdown code block (```python ... ```)
     code = re.sub(r"^```(?:python)?\s*", "", raw_code.strip(), flags=re.IGNORECASE)
     code = re.sub(r"\s*```$", "", code)
 
-    # Strip stray backticks, labels, and whitespace
     code = code.strip("` \n")
     code = code.replace("python", "").strip()
 
-    # Normalize imports (e.g., remove double spacing)
     code = re.sub(r"import\s*([a-zA-Z0-9_]+)", r"import \1", code)
     code = re.sub(r"from\s+([a-zA-Z0-9_.]+)\s+import\s+([a-zA-Z0-9_,\s]+)", r"from \1 import \2", code)
 
-    # Clean each line
     lines = code.split('\n')
     stripped_lines = [line.strip() for line in lines if line.strip()]
 
@@ -143,12 +130,12 @@ def format_code(code: str):
         return black.format_str(code, mode=black.FileMode())
     except Exception as e:
         print(f"Black formatting failed: {e}")
-        return code  # fallback to original
+        return code  
 
 def ensure_dataframe_has_id(df):
     if 'id' not in df.columns:
         df = df.copy()
-        df.insert(0, 'id', range(1, len(df) + 1))  # Inject id column at start
+        df.insert(0, 'id', range(1, len(df) + 1))  
     return df
 
 def call_openrouter(prompt, df=None, mode="transform", history=None):
@@ -163,7 +150,6 @@ def call_openrouter(prompt, df=None, mode="transform", history=None):
     }
 
     if mode == "transform":
-        # Add dataset context if provided
         columns = df.columns.tolist() if df is not None else []
         preview = df.head(5).to_dict(orient='records') if df is not None else []
 
@@ -180,7 +166,7 @@ def call_openrouter(prompt, df=None, mode="transform", history=None):
         )
         user_prompt = f"Given this command: '{prompt}', write Python pandas code to perform this on a dataframe named df."
 
-    else:  # mode == "chat"
+    else: 
         logger.info("in chat mode)")
         columns = df.columns.tolist() if df is not None else []
         print("Columns:", columns)
@@ -317,7 +303,6 @@ def google_signup():
     if not name or not email or not uid:
         return jsonify({"message": "Missing required fields"}), 400
 
-    # Validate email format
     email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     if not re.match(email_regex, email):
         return jsonify({"message": "Invalid email format"}), 400
@@ -433,7 +418,6 @@ def upload_dataset():
     try:
         bucket = storage_client.get_bucket(user_bucket_name)
 
-        # Delete existing dataset if present
         existing_dataset = user_data.get('dataset')
         if existing_dataset:
             existing_blob = bucket.blob(existing_dataset)
@@ -441,7 +425,6 @@ def upload_dataset():
                 existing_blob.delete()
                 print(f"Deleted existing dataset: {existing_dataset}")
 
-        # Upload the new file
         blob = bucket.blob(filename)
         blob.upload_from_file(file)
         print(f"Uploaded file: {filename}")
@@ -451,7 +434,6 @@ def upload_dataset():
             blob.download_to_filename(file_path)
             print(f"[DEBUG] File downloaded to {file_path}")
             try:
-                # Try reading as UTF-8 first
                 df_preview = pd.read_csv(file_path, nrows=5)
                 print(f"[DEBUG] CSV loaded with UTF-8")
             except UnicodeDecodeError:
@@ -557,7 +539,6 @@ def buff_clean():
 
         df = load_dataset(user_data['bucket'], dataset_name, delimiter=delimiter)
 
-        # Create a working copy
         if selected_columns:
             df_subset = df[selected_columns].copy()
         else:
@@ -573,11 +554,10 @@ def buff_clean():
                 dropped = before_rows - after_rows
                 transformation_summary.append(f"Dropped {dropped} rows with missing values.")
 
-                # Sync full DataFrame by dropping same rows
                 if not selected_columns:
                     df = df.loc[df_subset.index]
                 else:
-                    df = df.loc[df_subset.index]  # keep only common rows
+                    df = df.loc[df_subset.index] 
 
             elif strategy == "fill_missing_with_mean":
                 num_cols = df_subset.select_dtypes(include='number').columns
@@ -621,7 +601,6 @@ def buff_clean():
                 except Exception as e:
                     transformation_summary.append(f"One-hot encoding failed: {e}")
 
-        # Replace original columns with cleaned ones
         if selected_columns:
             for col in df_subset.columns:
                 df[col] = df_subset[col]
@@ -683,7 +662,6 @@ def buff_visualizer():
         if not chart_type or not x_col:
             return jsonify({"message": "Missing chart type or x column"}), 400
 
-        # Load dataset
         user_ref = firestore_client.collection('users').document(user_id)
         user_data = user_ref.get().to_dict()
         dataset_name = user_data.get('updated_dataset') or user_data.get('dataset')
@@ -720,7 +698,6 @@ def buff_visualizer():
         if y_col:
             plt.ylabel(y_col)
 
-        # Save and upload to GCS
         image_path = f"{user_id}_buff_visualizer.png"
         plt.tight_layout()
         plt.savefig(image_path)
@@ -812,7 +789,6 @@ def buff_trainer():
         mse = mean_squared_error(y_test, predictions)
         r2 = r2_score(y_test, predictions)
 
-        # Save model to GCS
         model_file = f"{request.user_id}_trained_model.pkl"
         with open(model_file, 'wb') as f:
             pickle.dump(model, f)
@@ -844,19 +820,16 @@ def buff_insight():
 
         df = load_dataset(user_data['bucket'], dataset_name, delimiter=delimiter)
 
-        # Generate data summary components
         describe = df.describe(include='all').to_dict()
         correlation = df.corr(numeric_only=True).to_dict()
         columns = df.columns.tolist()
         preview = df.head(5).to_dict(orient='records')
 
-        # Prepare context strings
         describe_str = json.dumps(describe, indent=2)
         correlation_str = json.dumps(correlation, indent=2)
         columns_str = ", ".join(columns)
         preview_str = json.dumps(preview, indent=2)
 
-        # Updated prompt with full context
         ai_prompt = (
             f"Here is a summary of the dataset:\n\n"
             f"Columns: {columns_str}\n\n"
@@ -897,7 +870,6 @@ def transform_dataset():
         if not command:
             return jsonify({"message": "No command provided"}), 400
 
-        # Load user & dataset
         user_ref = firestore_client.collection('users').document(user_id)
         user_data = user_ref.get().to_dict()
         bucket_name = user_data.get('bucket')
@@ -927,8 +899,7 @@ def transform_dataset():
         df = load_dataset(bucket_name, dataset_to_use, delimiter=delimiter)
 
         lower_cmd = command.lower()
-
-        # Descriptive command handlers
+        
         if match_column_command(lower_cmd):
             cols = df.columns.tolist()
             return jsonify({"message": "Your dataset has the following columns:\n\n" + "\n".join([f"● {col}" for col in cols])}), 200
@@ -957,7 +928,6 @@ def transform_dataset():
                                            "● columns\n"
                                            "● size\n"}), 200
 
-        # Handle non-transformational queries (chat)
         if not is_likely_transformation(command):
             history_ref = firestore_client.collection("users").document(user_id).collection("chat_history")
             recent_messages = history_ref.order_by("timestamp", direction=firestore.Query.DESCENDING).limit(5).stream()
@@ -977,7 +947,6 @@ def transform_dataset():
                     return jsonify({"message": ai_response}), 200
             return jsonify({"message": ai_response}), 200
 
-        # === AI Transformation Code ===
         history_ref = firestore_client.collection("users").document(user_id).collection("chat_history")
         recent_messages = history_ref.order_by("timestamp", direction=firestore.Query.DESCENDING).limit(5).stream()
         history = [{"role": doc.to_dict()["role"], "content": doc.to_dict()["content"]} for doc in reversed(list(recent_messages))]
@@ -1083,7 +1052,6 @@ def save_chat_message():
     except Exception as e:
         return jsonify({"message": f"Failed to save chat message: {str(e)}"}), 500
 
-#Dataset-status
 @app.route('/dataset-status', methods=['GET'])
 @token_required
 def dataset_status():
@@ -1111,10 +1079,9 @@ def run_custom_code():
     if not code:
         return jsonify({"message": "No code provided"}), 400
     code = format_code(code)
-    # Detect missing symbols
+
     undefined_names = detect_undefined_names(code)
 
-    # Add common imports for undefined names
     common_imports = {
         'pd': 'import pandas as pd',
         'np': 'import numpy as np',
@@ -1130,7 +1097,6 @@ def run_custom_code():
         if symbol in common_imports:
             code = f"{common_imports[symbol]}\n" + code
 
-    # Fetch dataset info
     user_ref = firestore_client.collection('users').document(user_id)
     user_data = user_ref.get().to_dict()
     bucket_name = user_data.get('bucket')
@@ -1141,14 +1107,12 @@ def run_custom_code():
     try:
         df = load_dataset(bucket_name, dataset_name, delimiter=delimiter)
         local_vars = {'df': df.copy()}
-        response = {}  # ✅ Initialize early
+        response = {} 
 
-        # Capture output
         output = StringIO()
         sys.stdout = output
 
         try:
-            # Parse code to find if last node is an expression
             parsed = ast.parse(code)
             if isinstance(parsed.body[-1], ast.Expr):
                 exec(
@@ -1166,7 +1130,7 @@ def run_custom_code():
                 logger.info(code)
 
                 plot_patterns = [
-                    r"plt\s*\.",                        # matplotlib
+                    r"plt\s*\.",                   
                     r"df\s*(?:\[[^\]]+\]|\.\w+)?\s*\.plot\s*\(",
                     r"df\s*(?:\[[^\]]+\]|\.\w+)?\s*\.boxplot\s*\(",
                     r"df\s*(?:\[[^\]]+\]|\.\w+)?\s*\.hist\s*\(",
@@ -1178,7 +1142,6 @@ def run_custom_code():
 
                 plot_detected = any(re.search(pattern, code) for pattern in plot_patterns)
 
-                # ✅ Save plot if code contains matplotlib
                 if plot_detected:
                     logger.info("Plotting detected, saving figure...")
                     import matplotlib
@@ -1217,7 +1180,7 @@ def run_custom_code():
         return jsonify(response)
 
     except Exception as e:
-        sys.stdout = sys.__stdout__  # Failsafe restore
+        sys.stdout = sys.__stdout__  
         return jsonify({"message": f"Execution error: {str(e)}"}), 500
 @app.route('/chat', methods=['GET'])
 @token_required
@@ -1282,7 +1245,6 @@ def preview_dataset():
         file_type = user_data.get('file_type', 'csv')
         delimiter = ',' if file_type == 'csv' else '\t'
 
-        # Download the file locally
         bucket = storage_client.bucket(user_data['bucket'])
         blob = bucket.blob(dataset_name)
         file_path = f"/tmp/{dataset_name}"

@@ -47,11 +47,9 @@ function Login() {
           password: formData.password,
         });
         const token = response.data.token;
-        localStorage.setItem('token', token); // Store the JWT
+        localStorage.setItem('token', token); 
         navigate('/chaty');
         console.log("success")
-        // Redirect to another page, e.g., dashboard
-        // Change '/dashboard' to your desired path
       } catch (error) {
         console.error('Login error:', error.response?.data || error.message);
       }
@@ -61,7 +59,6 @@ function Login() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    // Clear error when user starts typing
     if (errors[name as keyof typeof errors]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }

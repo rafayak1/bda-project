@@ -57,7 +57,7 @@ def test_login(client):
     with patch('app.firestore_client') as mock_firestore:
         mock_user = {
             'email': 'test@example.com',
-            'password': '$2b$12$NQ...hashed'  # bcrypt hash
+            'password': '$2b$12$NQ...hashed'  
         }
         mock_user_doc = MagicMock()
         mock_user_doc.id = "user123"
@@ -199,7 +199,7 @@ def test_transform_yes_command(client, headers):
         assert "Using updated dataset" in response.json["message"]
 
 def test_upload_dataset_csv_validation_failure(client, headers):
-    broken_csv = io.BytesIO(b'invalid,data\n123')  # Only 2 rows
+    broken_csv = io.BytesIO(b'invalid,data\n123')  
     broken_csv.name = 'bad.csv'
 
     with patch('app.firestore_client') as mock_firestore, \
@@ -278,7 +278,6 @@ def test_buff_trainer_options(client, headers):
         assert 'models' in response.json
         
 def test_invalid_token(client):
-    # Don't mock jwt.decode for this test — we want the real behavior
     response = client.get('/dataset-status', headers={'Authorization': 'Bearer invalid.token.here'})
     assert response.status_code == 401
     assert "invalid" in response.json["message"].lower()

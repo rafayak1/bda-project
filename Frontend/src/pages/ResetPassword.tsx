@@ -40,30 +40,7 @@ function ResetPassword() {
   const navigate = useNavigate();
   const location = useLocation();
   const userId = location.state?.userId;
-  // const handleSubmit = async (e: { preventDefault: () => void; }) => {
-  //   e.preventDefault();
-  //   setMessage('');
-
-  //   if (validateForm()) {
-  //     try {
-  //       const response = await axiosInstance.post('/resetpassword', {
-  //         newPassword: formData.newPassword,
-  //         confirmPassword: formData.confirmPassword,
-  //       });
-  //       // Store the JWT
-  //       navigate('/login');
-  //       console.log("success")
-  //       // Redirect to another page, e.g., dashboard
-  //       // Change '/dashboard' to your desired path
-  //     } catch (error) {
-  //       console.error('Login error:', error.response?.data || error.message);
-  //     }
-
-  //     setMessage('Your password has been successfully reset.');
-  //     setFormData({ newPassword: '', confirmPassword: '' }); // Clear fields
-  //   }
-  // };
-
+  
   const handleSubmit = async (e: { preventDefault: () => void; }) => {
     e.preventDefault();
     setMessage('');
@@ -85,7 +62,7 @@ function ResetPassword() {
   const handleChange = (e: { target: { name: any; value: any; }; }) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    setErrors((prev) => ({ ...prev, [name]: '' })); // Clear error when user starts typing
+    setErrors((prev) => ({ ...prev, [name]: '' })); 
   };
 
   return (
@@ -104,7 +81,6 @@ function ResetPassword() {
 
           <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
             <div className="space-y-4">
-              {/* New Password */}
               <div>
                 <label htmlFor="newPassword" className="block text-sm font-medium text-zinc-300">
                   New Password
@@ -127,7 +103,6 @@ function ResetPassword() {
                 </div>
               </div>
 
-              {/* Confirm Password */}
               <div>
                 <label htmlFor="confirmPassword" className="block text-sm font-medium text-zinc-300">
                   Confirm Password
@@ -151,10 +126,8 @@ function ResetPassword() {
               </div>
             </div>
 
-            {/* Success Message */}
             {message && <p className="mt-2 text-sm text-green-500 text-center">{message}</p>}
 
-            {/* Submit Button */}
             <div>
               <button
                 type="submit"
@@ -165,7 +138,6 @@ function ResetPassword() {
             </div>
           </form>
 
-          {/* Back to Login Link */}
           <div className="mt-4 text-center">
             <Link to="/login" className="text-sm text-white hover:text-zinc-300 transition-colors">
               Back to Sign In
